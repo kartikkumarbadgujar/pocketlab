@@ -1,0 +1,27 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.db
+.pytest_cache/
+.venv/
+
+# Local uploads and logs
+backend/private_uploads/
+*.log
+
+# Node and generated frontend output
+frontend/node_modules/
+frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+frontend/*.tsbuildinfo
+
+# Editor and OS files
+.vscode/
+.DS_Store
+Thumbs.db

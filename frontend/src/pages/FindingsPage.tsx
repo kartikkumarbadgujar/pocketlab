@@ -1,0 +1,27 @@
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
+import { ArrowRight, ChevronDown, Filter, ShieldAlert, TriangleAlert } from 'lucide-react'
+import { errorMessage, testRunsApi } from '../services/api'
+import PageHeader from '../components/PageHeader'
+import { EmptyPanel, ErrorPanel, LoadingPanel } from '../components/Feedback'
+
+export default function FindingsPage() {
+  const [severity, setSeverity] = useState('all')
+  const runsQuery = useQuery({ queryKey: ['runs'], queryFn: ({ signal }) => testRunsApi.list({ signal }) })
+  const recentRuns = [...(runsQuery.data ?? [])].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 50)
+  const runIds = recentRuns.map((run) => run.id)
+  const findingsQuery = useQuery({ queryKey: ['findings', runIds], enabled: runsQuery.isSuccess, queryFn: async ({ signal }) => {
+    const results = await Promise.all(recentRuns.map(async (run) => (await testRunsApi.findings(run.id, { signal })).map((finding) => ({ ...finding, run }))))
+    return results.flat()
+  } })
+  const rows = findingsQuery.data ?? []
+  const loading = runsQuery.isLoading || findingsQuery.isLoading
+  const error = runsQuery.error || findingsQuery.error
+  const retry = () => { void (runsQuery.error ? runsQuery.refetch() : findingsQuery.refetch()) }
+  const visible = rows.filter((finding) => severity === 'all' || finding.severity === severity).sort((a, b) => b.created_at.localeCompare(a.created_at))
+  return <div className="page-stack"><PageHeader eyebrow="RELIABILITY FINDINGS" title="Findings" description="Review issues reported by the runner, linked to the run that reproduced them." action={<Link to="/reports" className="button button-secondary">Impact reports <ArrowRight size={15} /></Link>} />
+    {!loading && !error && <div className="finding-summary"><div className="surface-card finding-summary-card"><span className="severity-icon critical"><TriangleAlert size={17} /></span><div><strong>{rows.filter((row) => row.severity === 'critical').length}</strong><span>Critical</span></div></div><div className="surface-card finding-summary-card"><span className="severity-icon high"><ShieldAlert size={17} /></span><div><strong>{rows.filter((row) => row.severity === 'high').length}</strong><span>High severity</span></div></div><div className="finding-scope"><Filter size={15} /> Latest {recentRuns.length} runs from the API</div></div>}
+    {error ? <ErrorPanel message={errorMessage(error)} retry={retry} /> : loading ? <LoadingPanel message="Fetching test results..." /> : !rows.length ? <EmptyPanel title="No findings reported" description="Findings appear here when a runner reports application failures or reliability issues." action={<Link to="/test-lab" className="button button-primary">Configure a test run <ArrowRight size={15} /></Link>} /> : <section className="surface-card results-card"><div className="filter-bar"><div><div className="eyebrow">FINDING LOG</div><h2>{visible.length} {visible.length === 1 ? 'finding' : 'findings'}</h2></div><label className="filter-select"><span>Severity</span><span className="select-wrap"><select value={severity} onChange={(e) => setSeverity(e.target.value)}><option value="all">All severities</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option><option value="info">Info</option></select><ChevronDown size={14} /></span></label></div>{visible.length ? <div className="finding-list">{visible.map((finding) => <article className="finding-row finding-row-detailed" key={`${finding.run.id}-${finding.id}`}><span className={`severity-icon ${finding.severity}`}><ShieldAlert size={17} /></span><div className="finding-copy"><div className="finding-title-row"><strong>{finding.title}</strong><span className={`severity-pill ${finding.severity}`}>{finding.severity}</span></div><p>{finding.description || 'No description provided.'}</p><div className="finding-meta"><span>{finding.finding_type}</span><span>{new Date(finding.created_at).toLocaleString()}</span><span>Confidence {finding.confidence == null ? 'not reported' : `${Math.round(finding.confidence * 100)}%`}</span><span>Run #{finding.run.id}</span></div><div className="finding-behavior"><div><strong>Expected behavior</strong><p>{finding.expected_behavior || 'Not supplied by runner'}</p></div><div><strong>Actual behavior</strong><p>{finding.actual_behavior || 'Not supplied by runner'}</p></div></div>{finding.reproduction_steps_json.length > 0 && <details className="finding-reproduction"><summary>Reproduction steps</summary><ol>{finding.reproduction_steps_json.map((step, index) => <li key={index}>{typeof step === 'string' ? step : JSON.stringify(step)}</li>)}</ol></details>}<div className="finding-evidence"><span>{finding.evidence_reference ? `Evidence reference: ${finding.evidence_reference}` : 'No evidence reference attached'}</span><span>{finding.estimated_affected_users == null ? 'No user-impact estimate attached' : `${Math.round(finding.estimated_affected_users).toLocaleString()} estimated affected users`}</span><small>Profile/network condition details are not included in the findings API. Root-cause attribution is not inferred here.</small></div></div><Link to={`/runs/${finding.run.id}`} className="icon-link" aria-label={`Open run ${finding.run.id}`}><ArrowRight size={16} /></Link></article>)}</div> : <div className="compact-empty">No findings match this severity filter.</div>}</section>}
+  </div>
+}

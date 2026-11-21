@@ -1,0 +1,4 @@
+.glow-cursor { position: absolute; inset: 0; overflow: hidden; pointer-events: none; border-radius: inherit; opacity: .74; }
+.glow-cursor canvas { width: 100%; height: 100%; display: block; }
+.glow-cursor.is-fallback::after { content: ''; position: absolute; width: 22rem; height: 22rem; right: -7rem; top: -8rem; border-radius: 50%; background: radial-gradient(circle, rgba(39,119,255,.28), rgba(133,87,255,.14) 38%, transparent 72%); filter: blur(20px); }
+@media (prefers-reduced-motion: reduce), (pointer: coarse) { .glow-cursor { display: none; } }
