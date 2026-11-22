@@ -49,7 +49,7 @@ class FakeAdb(AdbManager):
                              stdout_bytes=stdout.encode() if binary and isinstance(stdout, str) else None)
 
 
-# ------------------------------------------------------------------------------------- safety
+# safety
 def test_process_runner_rejects_unlisted_executables_and_nul(tmp_path):
     runner = ProcessRunner()
     with pytest.raises(CommandNotAllowedError):
@@ -90,7 +90,7 @@ def test_avd_names_and_deletion_are_confined(tmp_path):
     assert manager.delete(name)["removed"] is True and manager.list_pocketlab_avds() == []
 
 
-# ------------------------------------------------------------------------------------- config / planning
+# config / planning
 def test_sdk_discovery_requires_explicit_location(tmp_path, monkeypatch):
     monkeypatch.delenv("ANDROID_SDK_ROOT", raising=False)
     monkeypatch.delenv("ANDROID_HOME", raising=False)
@@ -146,7 +146,7 @@ def test_measurement_records_refuse_fabrication():
         MeasurementRecord(parameter_key="app.pss_mb", source="android_api", status=MeasurementStatus.ACTUAL, collection_method="x")
 
 
-# ------------------------------------------------------------------------------------- APK manifest
+# APK manifest
 def build_axml(package: str, version_code: int, version_name: str, min_sdk: int) -> bytes:
     strings = ["versionCode", "versionName", "minSdkVersion", "package", "manifest", "uses-sdk", version_name, package]
     body = b""
@@ -188,7 +188,7 @@ def test_binary_manifest_parser(tmp_path):
     assert (aapt.package, aapt.version_code, aapt.min_sdk, aapt.target_sdk) == ("com.x.y", 7, 26, 34)
 
 
-# ------------------------------------------------------------------------------------- parsers
+# parsers
 def test_device_output_parsers():
     assert parse_meminfo("MemTotal:        2035100 kB\nMemAvailable:     812345 kB\n") == {"MemTotal": 2035100, "MemAvailable": 812345}
     app = parse_app_meminfo("  Dalvik Heap     1234     1200        0        0     2000     6144     3072     3072\n   TOTAL PSS:    51200            TOTAL RSS:   102400\n")
@@ -245,7 +245,7 @@ def test_netem_arguments():
     assert NetemGateway.netem_args(NetworkCondition(online=False), direction="ingress", seed=None) == ["netem", "loss", "100%"]
 
 
-# ------------------------------------------------------------------------------------- storage logic
+# storage logic
 class DiskSim:
     """Simulated /data partition: 2 GiB, 1.5 GiB free; fallocate consumes space."""
     def __init__(self, free_mb=1536, total_mb=2048):
@@ -292,7 +292,7 @@ def test_storage_reports_failure_when_space_cannot_be_created():
     assert record.application_status is ApplicationStatus.FAILED and "cannot create space" in record.evidence["reason"]
 
 
-# ------------------------------------------------------------------------------------- scenario logic
+# scenario logic
 class AppSim:
     """Scripted device for scenario-executor tests."""
     def __init__(self, crash=False, ui_text=None):
@@ -412,7 +412,7 @@ def test_low_storage_scenario_requires_condition(tmp_path, monkeypatch):
     assert result.status == "blocked" and "storage_constraint" in result.reason
 
 
-# ------------------------------------------------------------------------------------- lifecycle
+# lifecycle
 class RecordingReporter:
     def __init__(self, cancel_at=None):
         self.statuses, self.events, self.cancel_at = [], [], cancel_at

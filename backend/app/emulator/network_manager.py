@@ -33,7 +33,7 @@ logger = logging.getLogger("pocketlab.emulator.network")
 now = lambda: datetime.now(timezone.utc)  # noqa: E731
 
 
-# ------------------------------------------------------------------------------------------ connectivity
+# connectivity
 class Connectivity:
     def __init__(self, adb: AdbManager, console: EmulatorConsole | None):
         self.adb = adb
@@ -67,7 +67,7 @@ class Connectivity:
                                evidence={"commands": outputs}, verified_at=now())
 
 
-# ------------------------------------------------------------------------------------------ shapers
+# shapers
 class NetworkShaper:
     name = "none"
     supports: set[str] = set()
@@ -260,7 +260,7 @@ class NetemGateway(NetworkShaper):
         return {"removed": not self.created}
 
 
-# ------------------------------------------------------------------------------------------ probe
+# probe
 def parse_ping(text: str) -> dict:
     out: dict = {}
     if m := re.search(r"(\d+) packets transmitted, (\d+) (?:packets )?received.*?([\d.]+)% packet loss", text, re.S):
@@ -297,7 +297,7 @@ class NetworkProbe:
         ]
 
 
-# ------------------------------------------------------------------------------------------ facade + timeline
+# facade + timeline
 class NetworkManager:
     def __init__(self, shaper: NetworkShaper | None, connectivity: Connectivity, probe: NetworkProbe | None, base: NetworkCondition, seed: int | None):
         self.shaper, self.connectivity, self.probe, self.base, self.seed = shaper, connectivity, probe, base, seed

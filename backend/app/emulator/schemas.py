@@ -12,9 +12,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
-# --------------------------------------------------------------------------------------------
 # Lifecycle state machine
-# --------------------------------------------------------------------------------------------
 class EnvironmentStatus(str, Enum):
     PREPARED = "PREPARED"                    # user-side preflight passed, awaiting explicit execute
     QUEUED = "QUEUED"                        # claimable by a worker
@@ -65,9 +63,7 @@ def transition_allowed(current: str, new: str) -> bool:
         return False
 
 
-# --------------------------------------------------------------------------------------------
 # Status vocabularies
-# --------------------------------------------------------------------------------------------
 class MeasurementStatus(str, Enum):
     ACTUAL = "ACTUAL"            # measured on the device from a real OS/kernel/tool source
     EMULATED = "EMULATED"        # value reported by a virtual HAL / emulator control, not physics
@@ -108,9 +104,7 @@ class CapabilityStatus(str, Enum):
     REQUIRES_ROOTABLE_IMAGE = "requires_rootable_image"
 
 
-# --------------------------------------------------------------------------------------------
 # Requested environment (what the user asks for)
-# --------------------------------------------------------------------------------------------
 class ScreenSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
     width_px: int = Field(720, ge=320, le=3840)
@@ -312,9 +306,7 @@ def request_from_profile(configuration: dict[str, Any]) -> EnvironmentRequest:
     return EnvironmentRequest.model_validate(data)
 
 
-# --------------------------------------------------------------------------------------------
 # Capability report & preflight plan
-# --------------------------------------------------------------------------------------------
 class CapabilityEntry(BaseModel):
     status: CapabilityStatus
     reason: str | None = None
@@ -369,9 +361,7 @@ class PreflightResult(BaseModel):
     capability_report_at: datetime | None = None
 
 
-# --------------------------------------------------------------------------------------------
 # Worker -> API records
-# --------------------------------------------------------------------------------------------
 class ConditionRecord(BaseModel):
     parameter_key: str = Field(min_length=1, max_length=120)
     requested_value: Any = None

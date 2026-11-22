@@ -13,7 +13,7 @@ def _project(client, headers):
     return client.post("/api/v1/projects", json={"name": "Demo"}, headers=headers).json()["id"]
 
 
-# ------------------------------------------------------------------ assistant
+# assistant
 def test_assistant_disabled_without_key(client, auth_headers, monkeypatch):
     headers, _ = auth_headers
     monkeypatch.setattr(settings, "gemini_api_key", None)
@@ -54,7 +54,7 @@ def test_assistant_maps_upstream_rate_limit(client, auth_headers, monkeypatch):
     assert r.status_code == 429 and "busy" in r.json()["detail"]
 
 
-# ------------------------------------------------------------------ direct (Blob) upload
+# direct (Blob) upload
 TOKEN = "vercel_blob_rw_StoreAbc123_secretsecretsecret"
 
 

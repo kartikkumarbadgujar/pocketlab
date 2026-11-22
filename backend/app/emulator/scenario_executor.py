@@ -54,7 +54,7 @@ def load_definitions(directory: Path = SCENARIO_DIR) -> list[dict]:
     return definitions
 
 
-# ------------------------------------------------------------------------------------------ UI driver
+# UI driver
 class UiAutomatorDriver:
     """UI automation through the on-device UIAutomator framework: hierarchy dump + input injection."""
 
@@ -104,7 +104,7 @@ class UiAutomatorDriver:
         return x, y
 
 
-# ------------------------------------------------------------------------------------------ context/results
+# context/results
 @dataclass
 class ScenarioContext:
     adb: AdbManager
@@ -157,14 +157,14 @@ class ScenarioResult:
                 "artifacts": [{"file": p.name, "type": t} for p, t, _ in self.artifacts]}
 
 
-# ------------------------------------------------------------------------------------------ executor
+# executor
 class ScenarioExecutor:
     def __init__(self, ctx: ScenarioContext):
         self.ctx = ctx
         self.ui = UiAutomatorDriver(ctx.adb)
         self.state: dict[str, Any] = {}
 
-    # -- helpers ----------------------------------------------------------------------------
+    # helpers
     def _selector(self, config: dict) -> SelectorSpec | None:
         sel = config.get("selector") or {}
         if "binding" in sel:
@@ -234,7 +234,7 @@ class ScenarioExecutor:
             self.ctx.adb.shell("input", "swipe", str(x), str(y1), str(x), str(y2), str(duration), timeout=15)
         return {"swipes": count, "screen": [w, h]}
 
-    # -- action handlers: return observed values used by expectations ------------------------
+    # action handlers: return observed values used by expectations
     def a_require_condition(self, c, r):
         """Block the scenario when the environment condition it is designed around was not requested."""
         req = self.ctx.request
@@ -493,7 +493,7 @@ class ScenarioExecutor:
                                                 status=M.ACTUAL, collection_method="wall clock of UI scroll workload", run_scenario_id=r.run_scenario_id))
         return {"elapsed_s": elapsed}
 
-    # -- expectations ------------------------------------------------------------------------
+    # expectations
     @staticmethod
     def evaluate(expect: dict, observed: dict) -> list[dict]:
         results = []

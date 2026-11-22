@@ -40,7 +40,7 @@ class AdbManager:
     prefix: list[str] = field(default_factory=list)   # e.g. netns wrapper on a Linux gateway worker
     default_timeout: float = 60.0
 
-    # ---------------------------------------------------------------- primitives
+    # primitives
     def adb(self, *args: str, timeout: float | None = None, binary: bool = False, check: bool = False) -> CommandResult:
         return self.runner.run([*self.prefix, str(self.runner.path("adb")), "-s", self.serial, *args],
                                timeout=timeout or self.default_timeout, binary=binary, check=check)
@@ -62,7 +62,7 @@ class AdbManager:
         except CommandTimeoutError:
             return "timeout"
 
-    # ---------------------------------------------------------------- boot / readiness
+    # boot / readiness
     def wait_for_boot(self, timeout_s: float, *, alive: Callable[[], bool] | None = None,
                       cancelled: Callable[[], bool] | None = None, on_progress: Callable[[str], None] | None = None) -> dict:
         """Poll until Android reports boot completed and the package manager answers."""
@@ -100,7 +100,7 @@ class AdbManager:
             time.sleep(1)
         return self.shell("id", "-u", timeout=10).stdout.strip() == "0"
 
-    # ---------------------------------------------------------------- packages
+    # packages
     def install(self, apk: Path, *, grant_permissions: bool, timeout: float) -> CommandResult:
         args = ["install", "-r", "-t"] + (["-g"] if grant_permissions else []) + [str(apk)]
         return self.adb(*args, timeout=timeout)
@@ -125,7 +125,7 @@ class AdbManager:
     def force_stop(self, package: str) -> CommandResult:
         return self.shell("am", "force-stop", validate_package(package), timeout=20)
 
-    # ---------------------------------------------------------------- evidence
+    # evidence
     def device_epoch(self) -> float:
         out = self.shell("date", "+%s", timeout=10).stdout.strip()
         return float(out) if out.isdigit() else time.time()

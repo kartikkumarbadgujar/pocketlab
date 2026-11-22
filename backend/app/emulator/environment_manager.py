@@ -43,7 +43,7 @@ class EnvironmentManager:
             self.record(r)
         return records
 
-    # ---------------------------------------------------------------- device verification
+    # device verification
     def verify_device(self, props: dict) -> list[ConditionRecord]:
         d = self.request.device
         now = datetime.now(timezone.utc)
@@ -72,7 +72,7 @@ class EnvironmentManager:
                   "vm.heapSize; read back with getprop dalvik.vm.heapsize", "MB")
         return self._emit(records)
 
-    # ---------------------------------------------------------------- apply / verify
+    # apply / verify
     def record_plan_limitations(self, plan: PreflightResult) -> list[ConditionRecord]:
         return self._emit([ConditionRecord(parameter_key=item.parameter_key, requested_value=item.requested_value, unit=item.unit,
                                            application_status=PLAN_TO_STATUS[item.outcome], mechanism=item.mechanism,
@@ -100,7 +100,7 @@ class EnvironmentManager:
     def strict_failures(self, records: list[ConditionRecord]) -> list[str]:
         return [r.parameter_key for r in records if r.application_status is A.FAILED]
 
-    # ---------------------------------------------------------------- revert
+    # revert
     def revert_all(self) -> list[ConditionRecord]:
         records: list[ConditionRecord] = []
         for step in (self.memory.release, self.storage.release, self.battery.revert, self.network.reset):

@@ -102,7 +102,7 @@ def safe(fn, *args, **kwargs):
         return None
 
 
-# ---------------------------------------------------------------- login
+# login
 def login_page() -> None:
     left, right = st.columns([1.1, 1])
     with left:
@@ -136,7 +136,7 @@ def login_page() -> None:
         st.caption("Use PocketLab only with applications and devices you're authorized to test.")
 
 
-# ---------------------------------------------------------------- pages
+# pages
 def dashboard() -> None:
     st.header("Dashboard")
     projects = safe(call, "GET", "/projects", params={"limit": 100}) or []

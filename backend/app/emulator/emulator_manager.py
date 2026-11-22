@@ -80,7 +80,7 @@ class RunJob:
                    apk_sha256=build["apk_sha256"], scenarios=job.get("scenarios", []), actual_device_id=devices[0] if devices else None)
 
 
-# ------------------------------------------------------------------------------------------ host resources
+# host resources
 class HostLock:
     """Process-wide exclusive lock: one emulator test per worker host by default."""
 
@@ -154,7 +154,7 @@ def check_host_capacity(settings: WorkerSettings, request: EnvironmentRequest) -
     return {"ram_available_mb": free_mb, "ram_reserved_mb": need, "disk_free_mb": disk_free, "cpu_load_pct": load}
 
 
-# ------------------------------------------------------------------------------------------ manager
+# manager
 @dataclass
 class _Run:
     job: RunJob
@@ -185,7 +185,7 @@ class EmulatorManager:
         self.detector = CapabilityDetector(settings)
         self.last_error: Exception | None = None
 
-    # -------------------------------------------------------------- helpers
+    # helpers
     def _transition(self, run: _Run, status: S, message: str, **fields: Any) -> None:
         if run.cancel.is_set() and status not in (S.CANCEL_REQUESTED, S.CLEANING, S.CLEANED, S.FAILED):
             raise CancelledError("Cancellation requested")
@@ -218,7 +218,7 @@ class EmulatorManager:
             avd = AvdManager(runner, self.settings.avd_home, sdk.root)
         return sweep_orphans(self.state, avd, self.settings.runs_dir, active_run_ids=set(active))
 
-    # -------------------------------------------------------------- main entry point
+    # main entry point
     def execute(self, job: RunJob, reporter: Reporter) -> str:
         run_dir = self.settings.runs_dir / f"run_{job.run_id}_a{job.attempt}"
         run_dir.mkdir(parents=True, exist_ok=True)
@@ -287,7 +287,7 @@ class EmulatorManager:
         except Exception:
             logger.exception("status_report_failed")
 
-    # -------------------------------------------------------------- stages
+    # stages
     def _provision_and_boot(self, run: _Run, runner: ProcessRunner, sdk: AndroidSdk, plan) -> None:
         job, s = run.job, self.settings
         image = plan.selected_system_image

@@ -96,7 +96,7 @@ export default function TestLabPage() {
       if (androidMode && runId !== null) {
         // Never leave an Android run without an environment in the queue: cancel it and use a fresh key next time.
         idempotency.current = null
-        try { await testRunsApi.cancel(runId) } catch { /* the error above is what the user needs to act on */ }
+        try { await testRunsApi.cancel(runId) } catch { /* Keep the original submission error visible. */ }
       }
     } finally { setSubmitting(false) }
   })

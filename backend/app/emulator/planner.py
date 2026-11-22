@@ -54,7 +54,7 @@ def plan_environment(req: EnvironmentRequest, report: CapabilityReport | None) -
     emulator = req.environment_type == "emulator"
     image: SystemImageInfo | None = None
 
-    # ---- host / tooling -------------------------------------------------------------------
+    # host / tooling
     required_tools = ["android_sdk", "adb"] + (["emulator", "avdmanager", "virtualization"] if emulator else [])
     for tool in required_tools:
         if not _available(report, tool):
@@ -105,7 +105,7 @@ def plan_environment(req: EnvironmentRequest, report: CapabilityReport | None) -
             items.append(PlanItem(parameter_key=key, requested_value=value, outcome="unsupported",
                                   reason="A physical device's hardware cannot be changed; the actual value will be observed and reported."))
 
-    # ---- storage ----------------------------------------------------------------------------
+    # storage
     reserve = int(report.host.get("storage_reserve_mb", DEFAULT_STORAGE_RESERVE_MB))
     st = req.storage
     if st.free_target_mb is not None or st.free_target_pct is not None:
@@ -125,7 +125,7 @@ def plan_environment(req: EnvironmentRequest, report: CapabilityReport | None) -
         items.append(PlanItem(parameter_key="storage.app_storage_limit_mb", requested_value=st.app_storage_limit_mb, unit="MB", outcome="unsupported",
                               reason="Android has no per-app storage quota control; constrain free space instead."))
 
-    # ---- memory -----------------------------------------------------------------------------
+    # memory
     if req.memory.pressure_enabled:
         target = req.memory.target_available_mb or 0
         if emulator and target >= req.device.ram_mb:
@@ -141,7 +141,7 @@ def plan_environment(req: EnvironmentRequest, report: CapabilityReport | None) -
                                   outcome="will_apply" if _available(report, "memory_pressure") else "unsupported",
                                   mechanism="size-capped tmpfs filled with incompressible data as root; MemAvailable watchdog; released after the scenario"))
 
-    # ---- network ----------------------------------------------------------------------------
+    # network
     net = req.network
     gateway = emulator and _available(report, "network_gateway")
     console_ok = emulator and _available(report, "network_bandwidth")
@@ -189,7 +189,7 @@ def plan_environment(req: EnvironmentRequest, report: CapabilityReport | None) -
         if missing:
             result.warnings.append("Some timeline stages request packet-level effects this worker cannot apply: " + ", ".join(missing))
 
-    # ---- battery ------------------------------------------------------------------------------
+    # battery
     b = req.battery
     for key, value in (("battery.level_pct", b.level_pct), ("battery.charging", b.charging), ("battery.ac_connected", b.ac_connected),
                        ("battery.health", b.health), ("battery.present", b.present)):
@@ -206,7 +206,7 @@ def plan_environment(req: EnvironmentRequest, report: CapabilityReport | None) -
         items.append(PlanItem(parameter_key="battery.saver_enabled", requested_value=b.saver_enabled, outcome="will_apply",
                               mechanism="cmd power set-mode / settings global low_power; verified from dumpsys power"))
 
-    # ---- thermal ------------------------------------------------------------------------------
+    # thermal
     t = req.thermal
     if t.observe:
         items.append(PlanItem(parameter_key="thermal.observation", requested_value=True,
@@ -224,7 +224,7 @@ def plan_environment(req: EnvironmentRequest, report: CapabilityReport | None) -
     if t.sustained_workload_seconds and not emulator:
         items.append(PlanItem(parameter_key="thermal.sustained_workload_seconds", requested_value=t.sustained_workload_seconds, unit="s", outcome="will_apply"))
 
-    # ---- measurement tooling notes ---------------------------------------------------------
+    # measurement tooling notes
     if emulator and image is not None and image.api_level < 28:
         result.warnings.append("Perfetto tracing needs API 28+; frame metrics will use dumpsys gfxinfo only.")
 

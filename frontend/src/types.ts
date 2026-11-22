@@ -21,7 +21,7 @@ export type Finding = { id: number; test_run_id: number; run_scenario_id: number
 export type Artifact = { id: number; test_run_id: number; artifact_type: string; storage_key: string; filename: string; sha256: string; size_bytes: number; content_type: string; created_at: string }
 export type ImpactEstimate = { id: number; test_run_id: number; monthly_active_users: number; condition_group: string; population_share: number; observed_failure_count: number; total_test_attempts: number; estimated_failure_rate: number; estimated_affected_users: number; uncertainty_json: { method: string; failure_rate_95ci: [number, number]; affected_users_95ci: [number, number] }; data_source: string; assumptions: string[]; is_synthetic: boolean; created_at: string }
 
-// ---- Android execution environment -------------------------------------------------------------------
+// Android execution environment types
 export type EnvironmentType = 'emulator' | 'physical_device'
 export type EnvironmentStatus = 'PREPARED' | 'QUEUED' | 'PREFLIGHT' | 'PROVISIONING' | 'BOOTING' | 'READY' | 'INSTALLING' | 'APPLYING_CONDITIONS' | 'VERIFYING_CONDITIONS' | 'EXECUTING' | 'COLLECTING_METRICS' | 'ANALYZING' | 'COMPLETED' | 'FAILED' | 'CANCEL_REQUESTED' | 'CLEANING' | 'CLEANED'
 export type ApplicationStatus = 'applied_verified' | 'applied_unverified' | 'emulated' | 'configured' | 'unsupported' | 'requires_physical_device' | 'requires_linux_gateway' | 'failed' | 'reverted'
