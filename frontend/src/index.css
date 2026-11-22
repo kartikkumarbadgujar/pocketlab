@@ -251,3 +251,72 @@ textarea { min-height: unset; resize: vertical; }
 .finding-evidence small { color: #929cad; }
 @media (max-width: 650px) { .finding-behavior { grid-template-columns: 1fr; } }
 
+/* Formal, high-trust engineering dashboard surfaces */
+:root {
+  color: #09090B;
+  --navy: #F4F4F5;
+  --navy-soft: #FFFFFF;
+  --ink: #09090B;
+  --muted: #52525B;
+  --faint: #71717A;
+  --blue: #18181B;
+  --blue-dark: #27272A;
+  --border: #E4E4E7;
+  --canvas: #FAFAFA;
+  --surface: #FFFFFF;
+  --green: #52525B;
+  --rose: #52525B;
+  --amber: #B45309;
+  --cyan: #52525B;
+  --violet: #52525B;
+  background: #FAFAFA;
+}
+body,.app-shell,.app-main { background: #FAFAFA; color: #09090B; }
+.sidebar { color: #52525B; background: #F4F4F5; border-right: 1px solid #E4E4E7; }
+.brand-mark { background: #18181B; border-radius: 7px; box-shadow: none; }
+.brand-mark span { border-color: #fff; }
+.brand-mark span::after { background: #a1a1aa; border-color: #fff; }
+.brand-name { color: #09090B; }
+.brand-tagline,.workspace-switch span,.side-user span,.sidebar-note span:last-child { color: #71717A; }
+.workspace-switch,.side-user { border-color: #E4E4E7; }
+.workspace-switch { background: #fff; border-radius: 8px; }
+.workspace-avatar,.user-avatar,.topbar-avatar { color: #3F3F46; background: #F4F4F5; border: 1px solid #E4E4E7; }
+.workspace-switch strong,.side-user strong,.sidebar-note strong { color: #09090B; }
+.workspace-switch > svg,.sidebar .icon-button { color: #52525B; }
+.sidebar .icon-button:hover { background: #E4E4E7; }
+.nav-section-title { color: #71717A; }
+.side-link { color: #52525B; border: 1px solid transparent; border-radius: 6px; }
+.side-link:hover { background: #fff; color: #09090B; }
+.side-link.active { color: #09090B; background: #fff; border: 1px solid #E4E4E7; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+.side-link.active svg { color: #3F3F46; }
+.nav-new { color: #52525B; background: #F4F4F5; border: 1px solid #E4E4E7; }
+.sidebar-bottom,.side-user { border-color: #E4E4E7; }
+.online-dot { background: #71717A; box-shadow: none; }
+.topbar { background: rgba(255,255,255,.96); border-color: #E4E4E7; backdrop-filter: none; }
+.topbar-context,.breadcrumb-slash,.environment-pill,.topbar-current { color: #52525B; }
+.environment-pill { background: #fff; border-color: #E4E4E7; border-radius: 6px; }
+.page-content { background: #FAFAFA; }
+.page-heading h1,.card-heading h2,.faq-heading h2,.stat-value { color: #09090B; }
+.page-heading p,.recent-run-copy small,.stat-label,.stat-hint { color: #52525B; }
+.eyebrow,.chart-range { color: #71717A; }
+.button-primary { color: #fff; background: #18181B; border-radius: 6px; box-shadow: none; }
+.button-primary:hover:not(:disabled) { background: #27272A; box-shadow: none; }
+.text-link,.icon-link:hover { color: #0F766E; }
+.text-link:hover { color: #115E59; }
+.surface-card { background: #fff; border: 1px solid #E4E4E7; border-radius: 8px; box-shadow: none; }
+.stat-icon,.stat-icon.violet,.stat-icon.green,.stat-icon.rose,.stat-icon.amber,.stat-icon.cyan { color: #3F3F46; background: #F4F4F5; border: 1px solid #E4E4E7; border-radius: 6px; }
+.stat-card:nth-child(4) .stat-hint { color: #B45309; }
+.chart-legend { color: #52525B; }
+.chart-legend i { background: #0F766E; border-radius: 50%; }
+.chart-range,.recent-run-copy small { color: #71717A; }
+.chart-loading span { border-color: #E4E4E7; border-top-color: #0F766E; }
+.recent-run { border-color: #E4E4E7; }
+.recent-run-copy strong { color: #09090B; }
+.recent-run:hover .recent-run-copy strong { color: #0F766E; }
+.shortcut-card,.quick-link { background: #fff; border-color: #E4E4E7; border-radius: 8px; box-shadow: none; }
+.shortcut-icon,.shortcut-icon.violet,.shortcut-icon.cyan { color: #3F3F46; background: #F4F4F5; border: 1px solid #E4E4E7; border-radius: 6px; }
+.floating-dock { background: rgba(255,255,255,.98); border-color: #E4E4E7; border-radius: 8px; box-shadow: none; backdrop-filter: none; }
+.dock-link { color: #52525B; }
+.dock-link.active { color: #09090B; background: #F4F4F5; }
+button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible { outline-color: rgba(15,118,110,.32); }
+
