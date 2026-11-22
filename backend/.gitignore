@@ -7,3 +7,6 @@ __pycache__/
 private_uploads/
 worker_data/
 real_emulator_artifacts/
+.vercel
+.env.local
+.env*.local

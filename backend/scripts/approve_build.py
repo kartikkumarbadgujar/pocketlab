@@ -23,7 +23,7 @@ def main() -> int:
     parser.add_argument("--reason", required=True, help="Why this APK is authorized for execution")
     parser.add_argument("--reject", action="store_true")
     parser.add_argument("--remote-storage", action="store_true",
-                        help="The APK lives on the hosted API's disk (e.g. Render), not this machine: approve from the database "
+                        help="The APK lives on the hosted API's disk (e.g. a hosted server), not this machine: approve from the database "
                              "record only. The execution worker still re-verifies the SHA-256 before installing.")
     args = parser.parse_args()
     with SessionLocal() as db:

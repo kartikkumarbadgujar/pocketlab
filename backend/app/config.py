@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     refresh_token_days: int = 30
     runner_token: str
     cors_origins: list[str] = ["http://localhost:3000"]
-    # Optional regex for hosted frontends whose exact hostname is assigned by the platform (e.g. a Render suffix).
+    # Optional regex for hosted frontends whose exact hostname is assigned by the platform (e.g. Vercel deployment URLs).
     cors_origin_regex: str | None = None
     trusted_hosts: list[str] = ["localhost", "127.0.0.1", "testserver"]
     upload_dir: str = "./private_uploads"

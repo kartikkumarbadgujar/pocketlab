@@ -1,0 +1,14 @@
+.env
+.env.*
+.venv
+__pycache__
+.pytest_cache
+*.db
+private_uploads
+worker_data
+real_emulator_artifacts
+tests
+docs
+Dockerfile
+docker-compose.yml
+.vercel

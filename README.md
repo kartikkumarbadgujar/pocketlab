@@ -44,7 +44,8 @@ python -m app.workers.emulator_runner --capabilities   # what this host can real
 python -m app.workers.emulator_runner                  # claim and execute queued runs
 ```
 
-To deploy publicly (dashboard on Vercel, API and database on Render), see `backend/docs/DEPLOY_RENDER.md`.
+To deploy publicly for free (dashboard and API on Vercel, PostgreSQL on Neon), see `backend/docs/DEPLOY_VERCEL.md`.
+Live: dashboard https://pocketlab-wheat.vercel.app, API https://pocketlab-api.vercel.app/docs.
 
 See `backend/docs/ANDROID_WORKER.md` for setup and `IMPLEMENTATION_REPORT.md` for what has and has not been verified.
 
