@@ -47,7 +47,7 @@ def main() -> int:
                 return 1
         build.scan_status = "rejected" if args.reject else "approved"
         db.add(AuditLog(actor_user_id=None, action="build.reject" if args.reject else "build.approve", resource_type="app_build",
-                        resource_id=str(build.id), outcome=f"operator: {args.reason[:80]}"))
+                        resource_id=str(build.id), outcome=f"operator: {args.reason}"[:40]))
         db.commit()
         print(f"Build {build.id} ({build.package_name}, sha256 {digest[:12]}...) -> {build.scan_status}")
     return 0

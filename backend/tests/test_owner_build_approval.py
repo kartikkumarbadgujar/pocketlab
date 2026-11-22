@@ -61,3 +61,18 @@ def test_operator_only_mode(client, auth_headers, monkeypatch):
     pid, bid = _upload(client, headers)
     monkeypatch.setattr(settings, "allow_owner_build_approval", False)
     assert client.post(f"/api/v1/projects/{pid}/builds/{bid}/approve", json=OK, headers=headers).status_code == 403
+
+
+def test_audit_outcome_fits_column(client, auth_headers):
+    # PostgreSQL enforces VARCHAR lengths (SQLite does not), so a long reason must not break approval.
+    from app.main import app
+    from app.database import get_db
+    from app.models import AuditLog
+    from sqlalchemy import select
+    headers, _ = auth_headers
+    pid, bid = _upload(client, headers)
+    r = client.post(f"/api/v1/projects/{pid}/builds/{bid}/approve", json={**OK, "reason": "x" * 300}, headers=headers)
+    assert r.status_code == 200
+    db = next(app.dependency_overrides[get_db]())
+    row = db.scalars(select(AuditLog).where(AuditLog.action == "build.approve")).first()
+    assert len(row.outcome) <= AuditLog.__table__.c.outcome.type.length

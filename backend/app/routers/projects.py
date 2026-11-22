@@ -58,7 +58,7 @@ def approve_own_build(project_id: int, build_id: int, data: BuildApprovalInput, 
     if digest != build.apk_sha256:
         raise HTTPException(409, "Stored APK does not match the uploaded file's SHA-256; refusing to approve")
     build.scan_status = "approved"
-    db.add(AuditLog(actor_user_id=user.id, action="build.approve", resource_type="app_build", resource_id=str(build.id), outcome=f"owner: {data.reason[:80]}"))
+    db.add(AuditLog(actor_user_id=user.id, action="build.approve", resource_type="app_build", resource_id=str(build.id), outcome=f"owner: {data.reason}"[:40]))
     db.commit()
     return {"id": build.id, "scan_status": build.scan_status}
 
