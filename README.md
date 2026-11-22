@@ -44,7 +44,7 @@ python -m app.workers.emulator_runner --capabilities   # what this host can real
 python -m app.workers.emulator_runner                  # claim and execute queued runs
 ```
 
-To deploy the dashboard, API and database publicly, see `backend/docs/DEPLOY_RENDER.md` (Render Blueprint in `render.yaml`).
+To deploy publicly (dashboard on Vercel, API and database on Render), see `backend/docs/DEPLOY_RENDER.md`.
 
 See `backend/docs/ANDROID_WORKER.md` for setup and `IMPLEMENTATION_REPORT.md` for what has and has not been verified.
 

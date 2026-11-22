@@ -1,4 +1,4 @@
-# Render Blueprint: PostgreSQL + FastAPI API (Docker) + React dashboard (static).
+# Render Blueprint: PostgreSQL + FastAPI API (Docker). The dashboard is hosted on Vercel (frontend/vercel.json).
 # Deploy: https://render.com/deploy?repo=https://github.com/kartikkumarbadgujar/pocketlab
 # The Android execution worker is NOT deployed here (it needs the Android SDK and hardware virtualization);
 # run it on a laptop/VM pointed at the API URL. See backend/docs/DEPLOY_RENDER.md.
@@ -34,27 +34,13 @@ services:
       - key: ENVIRONMENT
         value: production
       - key: CORS_ORIGINS
-        value: '["https://pocketlab-kkb-web.onrender.com"]'
-      # Covers the case where Render appends a suffix to the dashboard hostname.
+        value: '["http://localhost:5173","http://127.0.0.1:5173"]'
+      # The Vercel dashboard (production and preview deployments of the "pocketlab" project).
+      # Tighten to the exact production domain once it is known.
       - key: CORS_ORIGIN_REGEX
-        value: '^https://pocketlab-kkb-web(-[a-z0-9]+)?\.onrender\.com$'
+        value: '^https://pocketlab[a-z0-9-]*\.vercel\.app$'
       # Render's edge only routes this service's own hostnames to it; health checks use an internal Host header.
       - key: TRUSTED_HOSTS
         value: '["*"]'
       - key: UPLOAD_DIR
         value: /app/private_uploads
-
-  - type: web
-    name: pocketlab-kkb-web
-    runtime: static
-    buildCommand: cd frontend && npm ci && npm run build
-    staticPublishPath: ./frontend/dist
-    envVars:
-      - key: VITE_API_BASE_URL
-        value: https://pocketlab-kkb-api.onrender.com/api/v1
-      - key: NODE_VERSION
-        value: 22.12.0
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
