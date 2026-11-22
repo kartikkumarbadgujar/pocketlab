@@ -50,3 +50,10 @@ Live: dashboard https://pocketlab-wheat.vercel.app, API https://pocketlab-api.ve
 See `backend/docs/ANDROID_WORKER.md` for setup and `IMPLEMENTATION_REPORT.md` for what has and has not been verified.
 
 Never commit `.env` files, credentials, local databases, APKs, or runner artifacts. See each application's README for tests, API contracts, and deployment limitations.
+
+## Streamlit dashboard
+
+`streamlit_app/streamlit_app.py` is a Streamlit version of the dashboard that uses the same API and accounts as the React app.
+Run locally with `pip install -r streamlit_app/requirements.txt` and `streamlit run streamlit_app/streamlit_app.py`.
+Deploy on https://share.streamlit.io: repository `kartikkumarbadgujar/pocketlab`, branch `main`, main file `streamlit_app/streamlit_app.py`.
+Set the `POCKETLAB_API_URL` secret to use another API (default: https://pocketlab-api.vercel.app/api/v1).
