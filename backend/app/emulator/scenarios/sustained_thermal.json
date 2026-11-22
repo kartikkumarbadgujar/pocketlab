@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "scenario_key": "sustained_thermal",
+  "name": "Sustained thermal observation",
+  "version": 2,
+  "category": "thermal",
+  "description": "Run a sustained scroll workload while sampling thermal status, HAL temperatures and CPU frequency (physical values only on physical devices).",
+  "steps": [
+    {
+      "action": "launch_app",
+      "config": {
+        "cold": true
+      },
+      "expect": {
+        "launch_status": "ok"
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "thermal_sample",
+      "timeout_seconds": 120
+    },
+    {
+      "action": "sustained_workload",
+      "config": {
+        "interval_s": 30
+      },
+      "timeout_seconds": 1900
+    },
+    {
+      "action": "thermal_sample",
+      "timeout_seconds": 120
+    },
+    {
+      "action": "assert_app_healthy",
+      "expect": {
+        "process_alive": true,
+        "no_crash": true,
+        "no_anr": true
+      },
+      "timeout_seconds": 120
+    }
+  ]
+}

@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "scenario_key": "low_storage_handling",
+  "name": "Low-storage write and download handling",
+  "version": 2,
+  "category": "storage",
+  "description": "With free storage constrained by the environment, exercise a write/download and verify the app neither crashes nor hits unhandled ENOSPC.",
+  "steps": [
+    {
+      "action": "require_condition",
+      "config": {
+        "condition": "storage_constraint"
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "launch_app",
+      "config": {
+        "cold": true
+      },
+      "expect": {
+        "launch_status": "ok"
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "wait",
+      "config": {
+        "seconds": 3
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "tap",
+      "config": {
+        "selector": {
+          "binding": "trigger_download"
+        },
+        "optional": true
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "wait",
+      "config": {
+        "seconds": 15
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "storage_errors_check",
+      "expect": {
+        "max_storage_errors": 0
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "assert_app_healthy",
+      "expect": {
+        "process_alive": true,
+        "no_crash": true,
+        "no_anr": true
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "screenshot",
+      "config": {
+        "label": "low_storage"
+      },
+      "timeout_seconds": 120
+    }
+  ]
+}

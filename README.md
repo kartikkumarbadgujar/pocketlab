@@ -35,4 +35,15 @@ npm run dev -- --host 127.0.0.1 --port 5173
 - Dashboard: <http://127.0.0.1:5173>
 - API docs: <http://127.0.0.1:8000/docs>
 
+To execute APKs on real Android environments, start the execution worker on a machine with the Android SDK and
+hardware acceleration (a third terminal for local development):
+
+```powershell
+cd backend
+python -m app.workers.emulator_runner --capabilities   # what this host can really do
+python -m app.workers.emulator_runner                  # claim and execute queued runs
+```
+
+See `backend/docs/ANDROID_WORKER.md` for setup and `IMPLEMENTATION_REPORT.md` for what has and has not been verified.
+
 Never commit `.env` files, credentials, local databases, APKs, or runner artifacts. See each application's README for tests, API contracts, and deployment limitations.

@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "scenario_key": "scrolling_frame_performance",
+  "name": "UI scrolling and frame-performance test",
+  "version": 2,
+  "category": "performance",
+  "description": "Scroll the main (or bound) list 30 times while collecting gfxinfo frame statistics and a Perfetto trace.",
+  "steps": [
+    {
+      "action": "launch_app",
+      "config": {
+        "cold": true
+      },
+      "expect": {
+        "launch_status": "ok"
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "wait",
+      "config": {
+        "seconds": 4
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "tap",
+      "config": {
+        "selector": {
+          "binding": "scroll_screen"
+        },
+        "optional": true
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "frame_metrics_reset",
+      "timeout_seconds": 120
+    },
+    {
+      "action": "perfetto_start",
+      "config": {
+        "duration_s": 20
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "scroll",
+      "config": {
+        "count": 30,
+        "direction": "alternate",
+        "duration_ms": 250
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "frame_metrics_collect",
+      "expect": {
+        "min_frames": 30,
+        "max_janky_pct": 25
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "perfetto_stop",
+      "timeout_seconds": 120
+    },
+    {
+      "action": "collect_app_metrics",
+      "timeout_seconds": 120
+    },
+    {
+      "action": "assert_app_healthy",
+      "expect": {
+        "process_alive": true,
+        "foreground": true,
+        "no_crash": true,
+        "no_anr": true
+      },
+      "timeout_seconds": 120
+    }
+  ]
+}

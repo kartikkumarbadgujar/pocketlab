@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "scenario_key": "process_death_recovery",
+  "name": "Process death and local-state recovery",
+  "version": 2,
+  "category": "reliability",
+  "description": "Kill the backgrounded process as the low-memory killer would, relaunch, and verify the app restores (optionally a state indicator).",
+  "steps": [
+    {
+      "action": "launch_app",
+      "config": {
+        "cold": true
+      },
+      "expect": {
+        "launch_status": "ok"
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "wait",
+      "config": {
+        "seconds": 3
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "screenshot",
+      "config": {
+        "label": "before_death"
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "collect_app_metrics",
+      "timeout_seconds": 120
+    },
+    {
+      "action": "kill_process",
+      "expect": {
+        "killed": true
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "relaunch",
+      "config": {
+        "cold": false
+      },
+      "expect": {
+        "launch_status": "ok",
+        "pid_changed": true
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "wait",
+      "config": {
+        "seconds": 3
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "assert_visible",
+      "config": {
+        "selector": {
+          "binding": "state_indicator"
+        },
+        "optional": true,
+        "timeout_s": 20
+      },
+      "expect": {
+        "visible": true
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "screenshot",
+      "config": {
+        "label": "after_recovery"
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "assert_app_healthy",
+      "expect": {
+        "process_alive": true,
+        "foreground": true,
+        "no_crash": true,
+        "no_anr": true
+      },
+      "timeout_seconds": 120
+    }
+  ]
+}

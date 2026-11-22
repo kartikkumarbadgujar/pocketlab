@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "scenario_key": "cart_state_preservation",
+  "name": "Cart-state preservation",
+  "version": 1,
+  "category": "reliability",
+  "description": "Add an item to the cart, kill the background process, relaunch and verify the cart indicator is still present.",
+  "steps": [
+    {
+      "action": "launch_app",
+      "config": {
+        "cold": true
+      },
+      "expect": {
+        "launch_status": "ok"
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "tap",
+      "config": {
+        "selector": {
+          "binding": "add_to_cart"
+        }
+      },
+      "expect": {
+        "tapped": true
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "assert_visible",
+      "config": {
+        "selector": {
+          "binding": "cart_indicator"
+        }
+      },
+      "expect": {
+        "visible": true
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "screenshot",
+      "config": {
+        "label": "cart_before_kill"
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "kill_process",
+      "expect": {
+        "killed": true
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "relaunch",
+      "config": {
+        "cold": false
+      },
+      "expect": {
+        "launch_status": "ok",
+        "pid_changed": true
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "assert_visible",
+      "config": {
+        "selector": {
+          "binding": "cart_indicator"
+        },
+        "timeout_s": 20
+      },
+      "expect": {
+        "visible": true
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "screenshot",
+      "config": {
+        "label": "cart_after_relaunch"
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "assert_app_healthy",
+      "expect": {
+        "process_alive": true,
+        "foreground": true,
+        "no_crash": true,
+        "no_anr": true
+      },
+      "timeout_seconds": 120
+    }
+  ]
+}

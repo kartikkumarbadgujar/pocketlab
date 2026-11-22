@@ -1,5 +1,5 @@
 import axios, { type AxiosError, type AxiosRequestConfig, type InternalAxiosRequestConfig } from 'axios'
-import type { Artifact, Build, BuildUpload, Device, Finding, ImpactEstimate, Metric, Profile, ProfileVersion, Project, Scenario, ScenarioDetail, TestRun, TokenPair, User } from '../types'
+import type { Artifact, Build, BuildUpload, CapabilitiesResponse, Device, EnvironmentEvent, EnvironmentRequest, ExecutionEnvironment, Finding, ImpactEstimate, Metric, PreflightResult, Profile, ProfileVersion, Project, Scenario, ScenarioDetail, TestRun, TokenPair, User } from '../types'
 
 const baseURL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1').replace(/\/$/, '')
 const ACCESS_KEY = 'pocketlab.access'
@@ -141,6 +141,35 @@ export const testRunsApi = {
   metrics: metricsApi.listForRun,
   findings: findingsApi.listForRun,
   artifacts: evidenceArtifactsApi.listForRun,
+}
+
+/** Android execution environment. The API only records intent; the separately authenticated worker executes. */
+export const environmentApi = {
+  capabilities: async (options?: RequestOptions) => (await api.get<CapabilitiesResponse>('/environment/capabilities', options)).data,
+  preflight: async (configuration: EnvironmentRequest, actualDeviceId?: number) =>
+    (await api.post<PreflightResult>('/environment/preflight', { configuration, actual_device_id: actualDeviceId ?? null })).data,
+  prepare: async (runId: number, configuration: EnvironmentRequest, actualDeviceId?: number) =>
+    (await api.post<ExecutionEnvironment>(`/test-runs/${runId}/environment/prepare`, { configuration, actual_device_id: actualDeviceId ?? null })).data,
+  execute: async (runId: number) => (await api.post<ExecutionEnvironment>(`/test-runs/${runId}/execute`)).data,
+  /** Resolves to null for runs that have no Android environment (legacy runner runs). */
+  get: async (runId: number, options?: RequestOptions) => {
+    try { return (await api.get<ExecutionEnvironment>(`/test-runs/${runId}/environment`, options)).data }
+    catch (error) { if (axios.isAxiosError(error) && error.response?.status === 404) return null; throw error }
+  },
+  events: async (runId: number, options?: RequestOptions) => (await api.get<EnvironmentEvent[]>(`/test-runs/${runId}/environment/events`, { params: { limit: 1000 }, signal: options?.signal })).data,
+  cancel: async (runId: number) => (await api.post<{ result: string; environment: ExecutionEnvironment }>(`/test-runs/${runId}/environment/cancel`)).data,
+  cleanup: async (runId: number) => (await api.post<{ result: string }>(`/test-runs/${runId}/environment/cleanup`)).data,
+  artifactBlob: async (runId: number, artifactId: number, options?: RequestOptions) =>
+    (await api.get<Blob>(`/test-runs/${runId}/artifacts/${artifactId}/content`, { responseType: 'blob', timeout: 60_000, signal: options?.signal })).data,
+}
+
+/** Preflight detail returned in a 422 body by prepare/execute when capabilities do not allow the run. */
+export function preflightFromError(error: unknown): PreflightResult | null {
+  if (axios.isAxiosError(error)) {
+    const data: unknown = error.response?.data
+    if (data && typeof data === 'object' && 'preflight' in data) return (data as { preflight: PreflightResult }).preflight
+  }
+  return null
 }
 
 export const impactApi = {

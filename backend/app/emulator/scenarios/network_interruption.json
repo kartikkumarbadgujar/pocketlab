@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "scenario_key": "network_interruption",
+  "name": "Network disconnect and recovery",
+  "version": 2,
+  "category": "network",
+  "description": "Trigger an API call, take the device offline mid-request, verify the app survives, restore connectivity and verify recovery.",
+  "steps": [
+    {
+      "action": "launch_app",
+      "config": {
+        "cold": true
+      },
+      "expect": {
+        "launch_status": "ok"
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "wait",
+      "config": {
+        "seconds": 3
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "tap",
+      "config": {
+        "selector": {
+          "binding": "trigger_api_call"
+        },
+        "optional": true
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "network_offline",
+      "expect": {
+        "verified": true
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "wait",
+      "config": {
+        "seconds": 10
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "assert_app_healthy",
+      "expect": {
+        "process_alive": true,
+        "no_crash": true,
+        "no_anr": true
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "screenshot",
+      "config": {
+        "label": "while_offline"
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "network_online",
+      "expect": {
+        "verified": true
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "wait",
+      "config": {
+        "seconds": 8
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "assert_visible",
+      "config": {
+        "selector": {
+          "binding": "api_result"
+        },
+        "optional": true,
+        "timeout_s": 30
+      },
+      "expect": {
+        "visible": true
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "screenshot",
+      "config": {
+        "label": "after_recovery"
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "network_errors_check",
+      "timeout_seconds": 120
+    },
+    {
+      "action": "assert_app_healthy",
+      "expect": {
+        "process_alive": true,
+        "foreground": true,
+        "no_crash": true,
+        "no_anr": true
+      },
+      "timeout_seconds": 120
+    }
+  ]
+}

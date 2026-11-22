@@ -75,4 +75,31 @@ def seed_database(db: Session):
         scenario=TestScenario(name=name,description=desc,scenario_category=category); db.add(scenario); db.flush()
         ver=ScenarioVersion(scenario_id=scenario.id,version=1); db.add(ver); db.flush()
         for order,action in enumerate(steps): db.add(ScenarioStep(scenario_version_id=ver.id,step_order=order,action_type=action,action_configuration_json={},expected_result_json={},timeout_seconds=120))
+    db.flush()
+    seed_emulator_catalog(db)
     db.commit()
+
+
+# Executable scenario versions and the measurement provenance the Android execution worker reports.
+EXTRA_DEFINITIONS=[("app.process_restarts","reliability","count")]
+SOURCE_ADDITIONS={"storage.total_bytes":["filesystem"],"storage.free_pct":["filesystem"],"network.rtt_ms":["network_probe"],"network.jitter_ms":["network_probe"]}
+
+
+def seed_emulator_catalog(db: Session):
+    for key,category,unit in EXTRA_DEFINITIONS:
+        if not db.scalar(select(MeasurementDefinition).where(MeasurementDefinition.parameter_key==key)):
+            db.add(MeasurementDefinition(parameter_key=key,category=category,name=key.replace("."," ").replace("_"," ").title(),description="Observed value; source and validity are recorded on each metric sample.",data_type="number",unit=unit,minimum_value=0,supported_sources=["android_api","runner"],is_configurable=False,is_observation_only=True))
+    for key,sources in SOURCE_ADDITIONS.items():
+        definition=db.scalar(select(MeasurementDefinition).where(MeasurementDefinition.parameter_key==key))
+        if definition and not set(sources)<=set(definition.supported_sources or []):
+            definition.supported_sources=sorted(set(definition.supported_sources or [])|set(sources))
+    db.flush()
+    from app.emulator.scenario_executor import load_definitions
+    for definition in load_definitions():
+        scenario=db.scalar(select(TestScenario).where(TestScenario.name==definition["name"]))
+        if not scenario:
+            scenario=TestScenario(name=definition["name"],description=definition["description"],scenario_category=definition["category"]);db.add(scenario);db.flush()
+        if db.scalar(select(ScenarioVersion).where(ScenarioVersion.scenario_id==scenario.id,ScenarioVersion.version==definition["version"])):continue
+        ver=ScenarioVersion(scenario_id=scenario.id,version=definition["version"]);db.add(ver);db.flush()
+        for order,step in enumerate(definition["steps"]):
+            db.add(ScenarioStep(scenario_version_id=ver.id,step_order=order,action_type=step["action"],action_configuration_json=step.get("config",{}),expected_result_json=step.get("expect",{}),timeout_seconds=step.get("timeout_seconds",120)))

@@ -25,3 +25,9 @@ frontend/*.tsbuildinfo
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Android execution worker state and evidence
+backend/worker_data/
+worker_data/
+real_emulator_artifacts/
+*.pftrace

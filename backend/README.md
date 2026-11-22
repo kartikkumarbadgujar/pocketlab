@@ -40,6 +40,10 @@ Interactive API docs are at `http://127.0.0.1:8000/docs`; liveness and database 
 pytest -q
 ```
 
+Tests marked `mocked` exercise the Android orchestration with scripted adb output and are not evidence that real
+emulator execution works; `pytest -m real_emulator tests/integration` runs the real lifecycle on a host with the SDK
+(it is skipped unless `POCKETLAB_REAL_EMULATOR=1`).
+
 The suite uses an isolated in-memory SQLite database, covers authentication and refresh rotation, access control, SQL-injection-shaped input, validation, idempotent runs, duplicate metric samples, retry/lease recovery, APK archive rejection, impact estimation, and failed-write behavior. It does not exercise concurrent PostgreSQL claims or an Android device. Use PostgreSQL integration and disposable runner testing before deployment.
 
 ## Runner protocol
@@ -71,7 +75,12 @@ All application routes are under `/api/v1`. User routes use short-lived JWT acce
 | Scenarios | `GET /scenarios`, `GET /scenarios/{id}` |
 | Builds | `POST/GET /projects/{id}/builds` (upload uses multipart `file`, `package_name`) |
 | Runs | `POST/GET /test-runs`, `GET /test-runs/{id}`, `POST /test-runs/{id}/cancel`, `GET .../metrics`, `/findings`, `/artifacts`, `POST .../impact-estimates` |
-| Runner | `POST /runner/heartbeat`, `/runner/jobs/claim`, `/runner/jobs/{id}/heartbeat`, `/complete`, `/fail`, `/metrics/batch`, `/findings` |
+| Runner | `POST /runner/heartbeat`, `/runner/jobs/claim`, `/runner/jobs/{id}/heartbeat`, `/complete`, `/fail`, `/canceled`, `/apk`, `/metrics/batch`, `/findings`, `/artifacts`, `/scenarios/{rs_id}`, `PUT /runner/jobs/{id}/environment`, `POST .../environment/device`, `/environment/events`, `/environment/conditions` |
+| Android environment | `GET /environment/capabilities`, `POST /environment/preflight`, `POST /test-runs/{id}/environment/prepare` (202), `POST /test-runs/{id}/execute` (202), `GET /test-runs/{id}/environment`, `GET .../environment/events`, `POST .../environment/cancel` (202), `POST .../environment/cleanup` (202), `GET /test-runs/{id}/artifacts/{artifact_id}/content` |
+
+Real Android execution (disposable emulators or authorized physical devices) is performed by the separate worker
+`python -m app.workers.emulator_runner`; see [docs/ANDROID_WORKER.md](docs/ANDROID_WORKER.md) and the repository's
+`IMPLEMENTATION_REPORT.md` for what is applied, emulated, unsupported or physical-device-only.
 
 FastAPI publishes request/response schemas via `/docs` and `/openapi.json`. Runner metrics batch accepts `agent_name`, `authentication_identity`, and `samples`; metric `sample_key` is unique per run, making replayed batches safe.
 

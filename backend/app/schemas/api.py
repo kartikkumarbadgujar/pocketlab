@@ -84,6 +84,10 @@ class MeasurementInput(BaseModel):
     sample_key: str = Field(min_length=1, max_length=128)
     observed_at: datetime
     validity_status: Literal["valid", "unsupported", "unavailable", "invalid"] = "valid"
+    # ACTUAL = measured; EMULATED = virtual-HAL/emulator-control value. CONFIGURED is rejected: requested
+    # settings are condition applications, never measurements.
+    measurement_status: Literal["ACTUAL", "EMULATED", "CONFIGURED", "UNSUPPORTED", "UNAVAILABLE", "INVALID"] | None = None
+    collection_method: str | None = Field(default=None, max_length=160)
     device_id: int | None = None
     run_scenario_id: int | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -119,6 +123,12 @@ class MeasurementInput(BaseModel):
             raise ValueError("Android thermal status must be an integer from 0 through 6")
         if self.validity_status in {"unsupported", "unavailable"} and any(values):
             raise ValueError("unsupported or unavailable measurements must not contain a value")
+        if self.measurement_status == "CONFIGURED":
+            raise ValueError("CONFIGURED values are condition applications, not measurements")
+        if self.measurement_status is not None:
+            expected = {"ACTUAL": "valid", "EMULATED": "valid", "UNSUPPORTED": "unsupported", "UNAVAILABLE": "unavailable", "INVALID": "invalid"}[self.measurement_status]
+            if self.validity_status != expected:
+                raise ValueError(f"measurement_status {self.measurement_status} requires validity_status '{expected}'")
         return self
 
 
@@ -160,10 +170,15 @@ class FindingInput(BaseModel):
 class ClaimInput(BaseModel):
     agent_name: str = Field(min_length=1, max_length=160)
     authentication_identity: str = Field(min_length=1, max_length=255)
+    # None = legacy runner: claims only runs without an execution environment.
+    environment_types: list[Literal["emulator", "physical_device"]] | None = None
+    # Registered device ids this worker has attached (serials stay on the worker).
+    physical_device_ids: list[int] = Field(default_factory=list, max_length=50)
 
 
 class HeartbeatInput(ClaimInput):
     status: Literal["online", "busy"] = "online"
+    capability_report: dict[str, Any] | None = None
 
 
 class BatchMetrics(BaseModel):

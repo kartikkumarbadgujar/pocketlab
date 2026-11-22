@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "scenario_key": "cold_startup",
+  "name": "Cold application startup",
+  "version": 2,
+  "category": "performance",
+  "description": "Force-stop, cold launch with am start -W, record TTID/TTFD and verify the app reaches the foreground without crashing.",
+  "steps": [
+    {
+      "action": "force_stop",
+      "timeout_seconds": 120
+    },
+    {
+      "action": "launch_app",
+      "config": {
+        "cold": true
+      },
+      "expect": {
+        "launch_status": "ok",
+        "max_duration_ms": 5000
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "wait",
+      "config": {
+        "seconds": 3
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "screenshot",
+      "config": {
+        "label": "after_cold_start"
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "collect_app_metrics",
+      "timeout_seconds": 120
+    },
+    {
+      "action": "assert_app_healthy",
+      "expect": {
+        "process_alive": true,
+        "foreground": true,
+        "no_crash": true,
+        "no_anr": true
+      },
+      "timeout_seconds": 120
+    }
+  ]
+}

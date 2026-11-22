@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "scenario_key": "product_image_loading",
+  "name": "Product image loading under unstable connectivity",
+  "version": 2,
+  "category": "network",
+  "description": "Load the product list while the requested network timeline (if any) replays; the product image binding must become visible.",
+  "steps": [
+    {
+      "action": "launch_app",
+      "config": {
+        "cold": true
+      },
+      "expect": {
+        "launch_status": "ok"
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "network_timeline_start",
+      "config": {
+        "optional": true
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "tap",
+      "config": {
+        "selector": {
+          "binding": "product_list"
+        },
+        "optional": true
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "network_probe",
+      "config": {
+        "count": 15,
+        "label": "during_load"
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "assert_visible",
+      "config": {
+        "selector": {
+          "binding": "product_image"
+        },
+        "timeout_s": 45
+      },
+      "expect": {
+        "visible": true
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "screenshot",
+      "config": {
+        "label": "product_images"
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "network_timeline_await",
+      "config": {
+        "timeout_s": 1800
+      },
+      "timeout_seconds": 1800
+    },
+    {
+      "action": "network_errors_check",
+      "timeout_seconds": 120
+    },
+    {
+      "action": "assert_app_healthy",
+      "expect": {
+        "process_alive": true,
+        "foreground": true,
+        "no_crash": true,
+        "no_anr": true
+      },
+      "timeout_seconds": 120
+    }
+  ]
+}

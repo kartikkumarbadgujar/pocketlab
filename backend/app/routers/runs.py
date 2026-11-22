@@ -1,5 +1,4 @@
 import hashlib, json
-from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -64,8 +63,11 @@ def get_run(run_id:int,db:Session=Depends(get_db),user:User=Depends(current_user
 def cancel_run(run_id:int,db:Session=Depends(get_db),user:User=Depends(current_user)):
     run=_owned_run(db,user,run_id)
     if run.status in ("completed","failed","canceled"):raise HTTPException(409,"Run is already terminal")
-    run.status="canceled";run.completed_at=datetime.now(timezone.utc)
-    db.add(AuditLog(actor_user_id=user.id,action="test_run.cancel",resource_type="test_run",resource_id=str(run.id),outcome="canceled"));db.commit();return run
+    # Runs with a leased Android environment are canceled by the worker after it stops the emulator and cleans up;
+    # everything else (including legacy runner runs) is canceled immediately as before.
+    from app.routers.environment import request_cancel
+    from app.services.environment import environment_for_run
+    request_cancel(db,run,environment_for_run(db,run.id),user);db.commit();db.refresh(run);return run
 
 @router.get("/{run_id}/metrics")
 def run_metrics(run_id:int,limit:int=Query(500,ge=1,le=5000),offset:int=Query(0,ge=0),parameter_key:str|None=None,db:Session=Depends(get_db),user:User=Depends(current_user)):

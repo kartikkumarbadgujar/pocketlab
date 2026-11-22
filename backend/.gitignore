@@ -5,3 +5,5 @@ __pycache__/
 *.py[cod]
 *.db
 private_uploads/
+worker_data/
+real_emulator_artifacts/

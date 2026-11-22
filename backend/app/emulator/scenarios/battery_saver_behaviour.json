@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "scenario_key": "battery_saver_behaviour",
+  "name": "Battery-saver behaviour",
+  "version": 2,
+  "category": "battery",
+  "description": "Enable the real OS battery saver, background and resume the app, compare app metrics, then disable battery saver.",
+  "steps": [
+    {
+      "action": "launch_app",
+      "config": {
+        "cold": true
+      },
+      "expect": {
+        "launch_status": "ok"
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "wait",
+      "config": {
+        "seconds": 3
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "collect_app_metrics",
+      "timeout_seconds": 120
+    },
+    {
+      "action": "battery_saver",
+      "config": {
+        "enabled": true
+      },
+      "expect": {
+        "verified": true
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "background_app",
+      "timeout_seconds": 120
+    },
+    {
+      "action": "wait",
+      "config": {
+        "seconds": 5
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "relaunch",
+      "config": {
+        "cold": false
+      },
+      "expect": {
+        "launch_status": "ok"
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "wait",
+      "config": {
+        "seconds": 5
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "collect_app_metrics",
+      "timeout_seconds": 120
+    },
+    {
+      "action": "screenshot",
+      "config": {
+        "label": "battery_saver_on"
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "assert_app_healthy",
+      "expect": {
+        "process_alive": true,
+        "foreground": true,
+        "no_crash": true,
+        "no_anr": true
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "battery_saver",
+      "config": {
+        "enabled": false
+      },
+      "expect": {
+        "verified": true
+      },
+      "timeout_seconds": 120
+    }
+  ]
+}

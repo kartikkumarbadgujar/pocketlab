@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "scenario_key": "api_timeout_recovery",
+  "name": "API request timeout and retry",
+  "version": 2,
+  "category": "reliability",
+  "description": "Apply 3 s latency, trigger a request, verify the app does not crash or hang, then restore and verify the result appears.",
+  "steps": [
+    {
+      "action": "launch_app",
+      "config": {
+        "cold": true
+      },
+      "expect": {
+        "launch_status": "ok"
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "network_apply",
+      "config": {
+        "condition": {
+          "latency_ms": 3000,
+          "jitter_ms": 500
+        }
+      },
+      "expect": {
+        "verified": true
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "tap",
+      "config": {
+        "selector": {
+          "binding": "trigger_api_call"
+        },
+        "optional": true
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "wait",
+      "config": {
+        "seconds": 20
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "network_probe",
+      "config": {
+        "count": 10,
+        "label": "high_latency"
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "assert_app_healthy",
+      "expect": {
+        "process_alive": true,
+        "foreground": true,
+        "no_crash": true,
+        "no_anr": true
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "network_restore",
+      "timeout_seconds": 120
+    },
+    {
+      "action": "wait",
+      "config": {
+        "seconds": 8
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "assert_visible",
+      "config": {
+        "selector": {
+          "binding": "api_result"
+        },
+        "optional": true,
+        "timeout_s": 30
+      },
+      "expect": {
+        "visible": true
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "network_errors_check",
+      "timeout_seconds": 120
+    },
+    {
+      "action": "screenshot",
+      "config": {
+        "label": "after_timeout_recovery"
+      },
+      "timeout_seconds": 120
+    }
+  ]
+}

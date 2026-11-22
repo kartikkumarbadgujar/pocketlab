@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "scenario_key": "memory_pressure_recovery",
+  "name": "Memory-pressure and background-process recovery",
+  "version": 2,
+  "category": "memory",
+  "description": "Background the app, apply bounded in-guest memory pressure, release it and verify the app resumes or restores.",
+  "steps": [
+    {
+      "action": "require_condition",
+      "config": {
+        "condition": "memory_pressure"
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "launch_app",
+      "config": {
+        "cold": true
+      },
+      "expect": {
+        "launch_status": "ok"
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "wait",
+      "config": {
+        "seconds": 3
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "collect_app_metrics",
+      "timeout_seconds": 120
+    },
+    {
+      "action": "background_app",
+      "timeout_seconds": 120
+    },
+    {
+      "action": "memory_pressure_apply",
+      "expect": {
+        "verified": true
+      },
+      "timeout_seconds": 900
+    },
+    {
+      "action": "wait",
+      "config": {
+        "seconds": 10
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "memory_pressure_release",
+      "expect": {
+        "released": true
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "relaunch",
+      "config": {
+        "cold": false
+      },
+      "expect": {
+        "launch_status": "ok"
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "wait",
+      "config": {
+        "seconds": 3
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "collect_app_metrics",
+      "timeout_seconds": 120
+    },
+    {
+      "action": "assert_app_healthy",
+      "expect": {
+        "process_alive": true,
+        "foreground": true,
+        "no_crash": true,
+        "no_anr": true
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "screenshot",
+      "config": {
+        "label": "after_memory_pressure"
+      },
+      "timeout_seconds": 120
+    }
+  ]
+}

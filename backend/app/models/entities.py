@@ -192,6 +192,8 @@ class RunScenario(Base):
     status: Mapped[str] = mapped_column(String(20), default="queued")
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Per-step outcomes reported by the execution worker (expectations evaluated, evidence references).
+    result_json: Mapped[dict | None] = mapped_column(JSON)
     __table_args__ = (UniqueConstraint("test_run_id", "scenario_version_id"),)
 
 
@@ -210,6 +212,9 @@ class MetricSample(Base):
     sample_key: Mapped[str] = mapped_column(String(128), nullable=False)
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     validity_status: Mapped[str] = mapped_column(String(24), default="valid", nullable=False)
+    # ACTUAL / EMULATED / UNSUPPORTED / UNAVAILABLE / INVALID. Null for legacy samples.
+    measurement_status: Mapped[str | None] = mapped_column(String(16))
+    collection_method: Mapped[str | None] = mapped_column(String(160))
     metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
     __table_args__ = (UniqueConstraint("test_run_id", "sample_key"), CheckConstraint("validity_status IN ('valid','unsupported','unavailable','invalid')"), Index("ix_metric_run_parameter_observed", "test_run_id", "parameter_key", "observed_at"))
 
@@ -252,6 +257,9 @@ class RunnerAgent(Base):
     authentication_identity: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="offline", nullable=False)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Capability report computed by the worker from real host checks (SDK, images, acceleration, shaping).
+    capability_report_json: Mapped[dict | None] = mapped_column(JSON)
+    capability_reported_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
@@ -306,3 +314,91 @@ class ImpactEstimate(Base):
     is_synthetic: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     __table_args__ = (UniqueConstraint("test_run_id", "condition_group", name="uq_impact_run_condition"), CheckConstraint("population_share >= 0 AND population_share <= 1"), CheckConstraint("observed_failure_count >= 0 AND total_test_attempts > 0 AND observed_failure_count <= total_test_attempts"))
+
+
+ENVIRONMENT_STATUSES = (
+    "PREPARED", "QUEUED", "PREFLIGHT", "PROVISIONING", "BOOTING", "READY", "INSTALLING",
+    "APPLYING_CONDITIONS", "VERIFYING_CONDITIONS", "EXECUTING", "COLLECTING_METRICS", "ANALYZING",
+    "COMPLETED", "FAILED", "CANCEL_REQUESTED", "CLEANING", "CLEANED",
+)
+CONDITION_APPLICATION_STATUSES = (
+    "applied_verified", "applied_unverified", "emulated", "configured", "unsupported",
+    "requires_physical_device", "requires_linux_gateway", "failed", "reverted",
+)
+
+
+def _in(column: str, values: tuple[str, ...]) -> str:
+    return f"{column} IN ({','.join(repr(v) for v in values)})"
+
+
+class ExecutionEnvironment(Base):
+    """One disposable Android execution environment (AVD instance or leased physical device) per test run."""
+    __tablename__ = "execution_environments"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    test_run_id: Mapped[int] = mapped_column(ForeignKey("test_runs.id", ondelete="CASCADE"), unique=True, nullable=False)
+    environment_type: Mapped[str] = mapped_column(String(24), nullable=False)
+    emulator_name: Mapped[str | None] = mapped_column(String(120))
+    emulator_serial: Mapped[str | None] = mapped_column(String(64))
+    android_api_level: Mapped[int | None] = mapped_column(Integer)
+    system_image: Mapped[str | None] = mapped_column(String(160))
+    device_id: Mapped[int | None] = mapped_column(ForeignKey("devices.id", ondelete="SET NULL"))
+    requested_configuration_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    preflight_json: Mapped[dict | None] = mapped_column(JSON)
+    effective_configuration_json: Mapped[dict | None] = mapped_column(JSON)
+    capability_report_json: Mapped[dict | None] = mapped_column(JSON)
+    status: Mapped[str] = mapped_column(String(32), default="PREPARED", nullable=False, index=True)
+    status_message: Mapped[str | None] = mapped_column(Text)
+    outcome: Mapped[str | None] = mapped_column(String(16))
+    active_run_scenario_id: Mapped[int | None] = mapped_column(Integer)
+    attempt: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    cancel_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cleanup_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cleanup_verified: Mapped[bool | None] = mapped_column(Boolean)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    stopped_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (
+        CheckConstraint("environment_type IN ('emulator','physical_device')", name="ck_execution_environments_type"),
+        CheckConstraint(_in("status", ENVIRONMENT_STATUSES), name="ck_execution_environments_status"),
+        CheckConstraint("outcome IS NULL OR outcome IN ('completed','failed','canceled')", name="ck_execution_environments_outcome"),
+    )
+
+
+class ConditionApplication(Base):
+    """Requested vs applied vs observed value for one test condition, with the evidence that supports it."""
+    __tablename__ = "condition_applications"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    environment_id: Mapped[int] = mapped_column(ForeignKey("execution_environments.id", ondelete="CASCADE"), index=True, nullable=False)
+    parameter_key: Mapped[str] = mapped_column(String(120), nullable=False)
+    requested_value: Mapped[dict | list | str | float | bool | None] = mapped_column(JSON)
+    applied_value: Mapped[dict | list | str | float | bool | None] = mapped_column(JSON)
+    observed_value: Mapped[dict | list | str | float | bool | None] = mapped_column(JSON)
+    unit: Mapped[str | None] = mapped_column(String(40))
+    application_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    mechanism: Mapped[str | None] = mapped_column(String(200))
+    evidence_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    attempt: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    applied_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (
+        CheckConstraint(_in("application_status", CONDITION_APPLICATION_STATUSES), name="ck_condition_applications_status"),
+        Index("ix_condition_env_parameter", "environment_id", "parameter_key"),
+    )
+
+
+class EnvironmentEvent(Base):
+    __tablename__ = "environment_events"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    environment_id: Mapped[int] = mapped_column(ForeignKey("execution_environments.id", ondelete="CASCADE"), index=True, nullable=False)
+    event_type: Mapped[str] = mapped_column(String(60), nullable=False)
+    status: Mapped[str | None] = mapped_column(String(32))
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    severity: Mapped[str] = mapped_column(String(16), default="info", nullable=False)
+    data_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    attempt: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    event_timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    __table_args__ = (
+        CheckConstraint("severity IN ('debug','info','warning','error')", name="ck_environment_events_severity"),
+        Index("ix_environment_events_env_id", "environment_id", "id"),
+    )

@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "scenario_key": "network_transition",
+  "name": "Wi-Fi/mobile-data handover",
+  "version": 2,
+  "category": "network",
+  "description": "Disable Wi-Fi so the default network moves to mobile data, then restore Wi-Fi; the app must stay healthy through both transitions.",
+  "steps": [
+    {
+      "action": "launch_app",
+      "config": {
+        "cold": true
+      },
+      "expect": {
+        "launch_status": "ok"
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "tap",
+      "config": {
+        "selector": {
+          "binding": "trigger_api_call"
+        },
+        "optional": true
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "network_switch",
+      "config": {
+        "to": "mobile",
+        "settle_s": 8
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "assert_app_healthy",
+      "expect": {
+        "process_alive": true,
+        "no_crash": true,
+        "no_anr": true
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "network_switch",
+      "config": {
+        "to": "wifi",
+        "settle_s": 8
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "wait",
+      "config": {
+        "seconds": 4
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "assert_visible",
+      "config": {
+        "selector": {
+          "binding": "api_result"
+        },
+        "optional": true,
+        "timeout_s": 20
+      },
+      "expect": {
+        "visible": true
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "network_errors_check",
+      "timeout_seconds": 120
+    },
+    {
+      "action": "assert_app_healthy",
+      "expect": {
+        "process_alive": true,
+        "foreground": true,
+        "no_crash": true,
+        "no_anr": true
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "screenshot",
+      "config": {
+        "label": "after_handover"
+      },
+      "timeout_seconds": 120
+    }
+  ]
+}

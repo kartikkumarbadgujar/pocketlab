@@ -65,7 +65,8 @@ def test_seed_catalog_is_complete_and_idempotent(client):
     with factory() as db:
         seed_database(db);seed_database(db)
         assert len(db.scalars(select(ConditionProfile)).all())==3
-        assert len(db.scalars(select(TestScenario)).all())==12
+        # 12 original scenarios + "Cart-state preservation" and "Application restart" added for the Android worker.
+        assert len(db.scalars(select(TestScenario)).all())==14
         assert db.scalar(select(MeasurementDefinition).where(MeasurementDefinition.parameter_key=="thermal.status")).maximum_value==6
         assert db.scalar(select(MeasurementDefinition).where(MeasurementDefinition.parameter_key=="network.packet_loss_pct")).is_observation_only is False
 

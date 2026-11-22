@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "scenario_key": "crash_anr_observation",
+  "name": "Application crash and ANR observation",
+  "version": 2,
+  "category": "reliability",
+  "description": "Exercise launch, scrolling, back navigation and relaunch while watching the crash and events buffers.",
+  "steps": [
+    {
+      "action": "launch_app",
+      "config": {
+        "cold": true
+      },
+      "expect": {
+        "launch_status": "ok"
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "wait",
+      "config": {
+        "seconds": 3
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "scroll",
+      "config": {
+        "count": 10,
+        "direction": "alternate"
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "press_key",
+      "config": {
+        "key": "KEYCODE_BACK"
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "relaunch",
+      "config": {
+        "cold": false
+      },
+      "expect": {
+        "launch_status": "ok"
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "scroll",
+      "config": {
+        "count": 10,
+        "direction": "alternate"
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "wait",
+      "config": {
+        "seconds": 5
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "action": "assert_app_healthy",
+      "expect": {
+        "process_alive": true,
+        "no_crash": true,
+        "no_anr": true
+      },
+      "timeout_seconds": 120
+    }
+  ]
+}
