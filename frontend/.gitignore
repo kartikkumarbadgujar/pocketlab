@@ -4,3 +4,6 @@ dist/
 *.tsbuildinfo
 playwright-report/
 test-results/
+.vercel
+.env.local
+.env*.local
