@@ -40,3 +40,15 @@ def test_unexpected_server_error_is_json_with_cors(client):
     assert response.status_code == 500
     assert response.json() == {"detail": "Internal server error"}
     assert response.headers["access-control-allow-origin"] == origin
+
+
+def test_rate_limiter_state_is_bounded(client, monkeypatch):
+    import app.main as main_module
+    monkeypatch.setattr(main_module, "RATE_LIMIT_MAX_CLIENTS", 3)
+    main_module._requests.clear()
+    for i in range(5):
+        main_module._requests[f"10.0.0.{i}"] = main_module.deque()
+        while len(main_module._requests) > main_module.RATE_LIMIT_MAX_CLIENTS:
+            main_module._requests.popitem(last=False)
+    assert client.get("/health/live").status_code == 200
+    assert len(main_module._requests) <= 3 and "10.0.0.0" not in main_module._requests
