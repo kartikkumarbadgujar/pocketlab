@@ -348,4 +348,8 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
   .floating-dock { width: min(calc(100% - 24px),560px); justify-content: space-around; bottom: max(10px,env(safe-area-inset-bottom)); }
   .dock-link { min-width: 38px; padding: 0 8px; }
 }
+@media (max-width: 400px) {
+  .floating-dock { gap: 2px; padding: 4px; }
+  .dock-link { min-width: 34px; padding: 0 6px; }
+}
 
