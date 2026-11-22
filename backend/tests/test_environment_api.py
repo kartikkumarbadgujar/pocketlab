@@ -4,10 +4,10 @@ The capability report posted here is test input shaped like a worker's report; t
 queueing, gating, state machine, provenance and cancellation rules - not that an emulator ran.
 """
 import io
-import zipfile
 from datetime import datetime, timedelta, timezone
 
 import pytest
+from tests.apk_factory import valid_apk_bytes
 
 RUNNER = {"Authorization": "Bearer test-runner-token"}
 IDENTITY = {"agent_name": "android-worker", "authentication_identity": "worker-key"}
@@ -45,16 +45,14 @@ def online_worker(client, **kwargs):
 
 def approved_build(client, headers, name="emu-app"):
     project = client.post("/api/v1/projects", json={"name": name}, headers=headers).json()
-    stream = io.BytesIO()
-    with zipfile.ZipFile(stream, "w") as archive:
-        archive.writestr("AndroidManifest.xml", b"placeholder manifest")
-    build = client.post(f"/api/v1/projects/{project['id']}/builds", data={"package_name": "com.example.shop"},
-                        files={"file": ("app.apk", stream.getvalue(), "application/vnd.android.package-archive")}, headers=headers).json()
+    apk = valid_apk_bytes("com.example.shop")
+    build = client.post(f"/api/v1/projects/{project['id']}/builds",
+                        files={"file": ("app.apk", apk, "application/vnd.android.package-archive")}, headers=headers).json()
     from app.models import AppBuild
     with client.app.state.testing_session() as db:
         db.get(AppBuild, build["id"]).scan_status = "approved"
         db.commit()
-    return project, build, stream.getvalue()
+    return project, build, apk
 
 
 def scenario_version(client, headers, name, version):

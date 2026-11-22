@@ -534,6 +534,9 @@ class ScenarioExecutor:
                 action, config = step["action_type"], step.get("configuration") or {}
                 expect = step.get("expected") or {}
                 sr = StepResult(index=index, action=action, started_at=datetime.now(timezone.utc).isoformat())
+                step_number = index + 1
+                self.ctx.emit_event("scenario_step_started", f"{name}: step {step_number}/{len(steps)} — {action.replace('_', ' ')} started",
+                                    {"run_scenario_id": run_scenario_id, "step_index": index, "step_count": len(steps), "action": action})
                 t = time.monotonic()
                 try:
                     observed = ACTIONS[action](self, config, result) or {}
@@ -562,6 +565,9 @@ class ScenarioExecutor:
                     break
                 finally:
                     sr.duration_ms = int((time.monotonic() - t) * 1000)
+                    self.ctx.emit_event("scenario_step_finished", f"{name}: step {step_number}/{len(steps)} — {action.replace('_', ' ')} {sr.status}",
+                                        {"run_scenario_id": run_scenario_id, "step_index": index, "step_count": len(steps),
+                                         "action": action, "status": sr.status, "duration_ms": sr.duration_ms})
                 if sr not in result.steps:
                     result.steps.append(sr)
             if result.status == "running":

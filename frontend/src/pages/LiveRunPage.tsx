@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, CheckCircle2, CircleAlert, Cpu, FileSearch, RefreshCw, Smartphone, StopCircle } from 'lucide-react'
@@ -75,6 +76,7 @@ export default function LiveRunPage() {
         <div className="run-meta"><span>Created {new Date(run.created_at).toLocaleString()}</span><span>{run.retry_count} worker attempt{run.retry_count === 1 ? '' : 's'}</span><span>{runQuery.isFetching ? 'Refreshing status…' : `Confirmed ${new Date(runQuery.dataUpdatedAt).toLocaleTimeString()}`}</span></div></div>
         <div className="live-run-actions">{!terminal && <button className="button button-secondary button-danger" onClick={() => cancelRun.mutate()} disabled={cancelRun.isPending || cancelPending}><StopCircle size={15} /> {cancelPending ? 'Stopping & cleaning up…' : cancelRun.isPending ? 'Canceling...' : 'Cancel run'}</button>}<Link className="button button-primary" to={`/runs/${run.id}`}><FileSearch size={15} /> Run details</Link></div></section>
       {environmentQuery.error && <div className="form-error" role="status">{errorMessage(environmentQuery.error)} · Environment details could not be refreshed.</div>}
+      <QueueWaitNotice environment={environment} />
       <ThoughtLine run={run} environment={environment} events={eventsQuery.data ?? []} />
       {environment && <EnvironmentReport runId={run.id} environment={environment} artifacts={artifactsQuery.data ?? []} findings={findingsQuery.data ?? []} />}
       <section className="surface-card results-card"><div className="card-heading"><div><div className="eyebrow">PHONE AND NETWORK READINGS</div><h2>Latest measurements</h2></div><span className="status-pill neutral">{metricsQuery.isFetching ? 'Refreshing' : `${metricsQuery.data?.length ?? 0} samples`}</span></div>
@@ -84,6 +86,21 @@ export default function LiveRunPage() {
       <div className="live-next-actions"><span>When this run finishes, inspect the collected evidence.</span><Link to={`/runs/${run.id}`}>Open run report <ArrowLeft size={15} /></Link></div>
     </> : <ErrorPanel message="This test run could not be found." retry={() => navigate('/test-lab')} />}
   </div>
+}
+
+function QueueWaitNotice({ environment }: { environment?: { status: string; created_at: string; updated_at: string } | null }) {
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => {
+    if (environment?.status !== 'QUEUED') return
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [environment?.status])
+  if (environment?.status !== 'QUEUED') return null
+  const queuedAt = new Date(environment.updated_at || environment.created_at).getTime()
+  const seconds = Math.max(0, Math.floor((now - queuedAt) / 1000))
+  if (!Number.isFinite(queuedAt) || seconds < 60) return null
+  const waited = `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, '0')}s`
+  return <div className="info-banner" role="status" aria-live="polite"><CircleAlert size={16} /><span>This run has waited {waited} for an Android worker. Keep <code>python -m app.workers.emulator_runner</code> running on the machine with the SDK; the run will begin when that worker claims it. You can cancel this queued run if the worker is offline.</span></div>
 }
 
 function metricValue(metric: Metric) {

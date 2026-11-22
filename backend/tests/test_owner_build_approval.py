@@ -1,20 +1,16 @@
-import io
-import zipfile
 from pathlib import Path
 
 from app.config import settings
+from tests.apk_factory import valid_apk_bytes
 
 
 def _apk() -> bytes:
-    data = io.BytesIO()
-    with zipfile.ZipFile(data, "w") as z:
-        z.writestr("AndroidManifest.xml", b"manifest")
-    return data.getvalue()
+    return valid_apk_bytes()
 
 
 def _upload(client, headers):
     pid = client.post("/api/v1/projects", json={"name": "Approve"}, headers=headers).json()["id"]
-    build = client.post(f"/api/v1/projects/{pid}/builds", data={"package_name": "com.example.app"},
+    build = client.post(f"/api/v1/projects/{pid}/builds",
                         files={"file": ("app.apk", _apk(), "application/vnd.android.package-archive")}, headers=headers).json()
     return pid, build["id"]
 

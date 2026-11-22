@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { BatteryMedium, Cpu, HardDrive, Info, MemoryStick, MousePointerClick, Plus, Thermometer, Trash2, Wifi } from 'lucide-react'
 import type { CapabilitiesResponse, EnvironmentRequest, Selector } from '../types'
 import { BINDING_NAMES, SCREEN_PRESETS, TIMELINE_PRESET } from '../environment'
@@ -20,7 +21,21 @@ export default function EnvironmentConfigurator({ value, onChange, capabilities 
   const emulator = value.environment_type === 'emulator'
   const worker = capabilities?.workers[0]
   const apiLevels = [...new Set((worker?.system_images ?? []).map((image) => image.api_level))].sort((a, b) => a - b)
-  const levelChoices = apiLevels.includes(value.device.api_level) ? apiLevels : [...apiLevels, value.device.api_level].sort((a, b) => a - b)
+  const apiLevelKey = apiLevels.join(',')
+  const levelChoices = apiLevels.length ? apiLevels : [value.device.api_level]
+  const minimumRamMb = value.device.api_level >= 37 ? 4096 : 1024
+  const minimumDataPartitionMb = value.device.api_level >= 37 ? 6144 : 1024
+  const ramChoices = [1024, 1536, 2048, 3072, 4096, 6144, 8192].filter((mb) => mb >= minimumRamMb)
+  const dataPartitionChoices = [2048, 4096, 6144, 8192, 16384].filter((mb) => mb >= minimumDataPartitionMb)
+  useEffect(() => {
+    if (!apiLevelKey || value.environment_type !== 'emulator') return
+    const installed = apiLevelKey.split(',').map(Number)
+    const apiLevel = installed.includes(value.device.api_level) ? value.device.api_level : installed[installed.length - 1]
+    const ramMb = apiLevel >= 37 ? Math.max(value.device.ram_mb, 4096) : value.device.ram_mb
+    const dataPartitionMb = apiLevel >= 37 ? Math.max(value.device.data_partition_mb, 6144) : value.device.data_partition_mb
+    if (apiLevel === value.device.api_level && ramMb === value.device.ram_mb && dataPartitionMb === value.device.data_partition_mb) return
+    onChange({ ...value, device: { ...value.device, api_level: apiLevel, ram_mb: ramMb, data_partition_mb: dataPartitionMb } })
+  }, [apiLevelKey, onChange, value])
   const set = <K extends Section>(key: K, patch: Partial<EnvironmentRequest[K]>) => onChange({ ...value, [key]: { ...value[key], ...patch } } as EnvironmentRequest)
   const screenPreset = (Object.entries(SCREEN_PRESETS).find(([, s]) => s.width_px === value.device.screen.width_px && s.height_px === value.device.screen.height_px)?.[0]) ?? '720p'
   const batteryMode = value.battery.charging === true ? 'charging' : value.battery.charging === false ? 'discharging' : ''
@@ -39,9 +54,9 @@ export default function EnvironmentConfigurator({ value, onChange, capabilities 
         </label>
         <label className="env-field"><span>Guest RAM</span>
           <select value={value.device.ram_mb} onChange={(e) => set('device', { ram_mb: Number(e.target.value) })}>
-            {[1024, 1536, 2048, 3072, 4096, 6144].map((mb) => <option key={mb} value={mb}>{mb >= 1024 ? `${mb / 1024} GB` : `${mb} MB`}</option>)}
+            {ramChoices.map((mb) => <option key={mb} value={mb}>{mb / 1024} GB</option>)}
           </select>
-          <small>hw.ramSize + -memory; MemTotal read back after boot.</small>
+          <small>{value.device.api_level >= 37 ? 'API 37+ requires at least 4 GB RAM.' : 'hw.ramSize + -memory; MemTotal read back after boot.'}</small>
         </label>
         <label className="env-field"><span>CPU cores</span>
           <select value={value.device.cpu_cores} onChange={(e) => set('device', { cpu_cores: Number(e.target.value) })}>
@@ -50,8 +65,9 @@ export default function EnvironmentConfigurator({ value, onChange, capabilities 
         </label>
         <label className="env-field"><span>Internal data partition</span>
           <select value={value.device.data_partition_mb} onChange={(e) => set('device', { data_partition_mb: Number(e.target.value) })}>
-            {[2048, 4096, 8192, 16384].map((mb) => <option key={mb} value={mb}>{mb / 1024} GB</option>)}
+            {dataPartitionChoices.map((mb) => <option key={mb} value={mb}>{mb / 1024} GB</option>)}
           </select>
+          {value.device.api_level >= 37 && <small>API 37+ phone images need at least a 6 GB data filesystem.</small>}
         </label>
         <label className="env-field"><span>Screen</span>
           <select value={screenPreset} onChange={(e) => set('device', { screen: { ...SCREEN_PRESETS[e.target.value as keyof typeof SCREEN_PRESETS] } })}>

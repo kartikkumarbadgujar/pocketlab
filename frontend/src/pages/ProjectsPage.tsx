@@ -22,12 +22,27 @@ function BuildUpload({ project, onClose, onUploaded }: { project: Project; onClo
     if (!file) return setError('Choose an APK file to upload.')
     if (!file.name.toLowerCase().endsWith('.apk')) return setError('The selected file must have an .apk extension.')
     if (file.size > 100 * 1024 * 1024) return setError('APK uploads are limited to 100 MB.')
-    if (!packageName.trim()) return setError('Enter the Android application package name.')
     try { onUploaded(await upload.mutateAsync()) }
     catch (e) { setError(errorMessage(e)) }
   }
   const busy = upload.isPending
-  return <div className="modal-backdrop" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}><section className="modal-card" role="dialog" aria-modal="true" aria-labelledby="upload-title"><div className="modal-header"><div><div className="eyebrow">PROJECT BUILD</div><h2 id="upload-title">Upload APK</h2></div><button className="icon-button" onClick={onClose} aria-label="Close"><X size={18} /></button></div><p className="modal-description">Uploads are stored in quarantine. A build cannot be queued until an external scanner approves it.</p><form onSubmit={submit} className="form-stack"><label className="upload-drop"><Upload size={20} /><strong>{file?.name ?? 'Choose an APK file'}</strong><span>{file ? bytes(file.size) : 'APK · up to 100 MB'}</span><input type="file" accept=".apk,application/vnd.android.package-archive" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></label><label className="field-label" htmlFor="package-name">Package name</label><input id="package-name" value={packageName} onChange={(e) => setPackageName(e.target.value)} placeholder="com.example.app" /><label className="field-label" htmlFor="version-name">Version name <span className="muted">(optional)</span></label><input id="version-name" value={version} onChange={(e) => setVersion(e.target.value)} placeholder="1.0.0" />{busy && <div className="upload-progress"><KineticTextLoader message="Uploading APK..." compact /><span>{progress}%</span></div>}{error && <div className="form-error" role="alert">{error}</div>}<div className="modal-actions"><button className="button button-secondary" type="button" onClick={onClose} disabled={busy}>Cancel</button><button className="button button-primary" type="submit" disabled={busy}><FileUp size={16} /> {busy ? 'Uploading...' : 'Upload to quarantine'}</button></div></form></section></div>
+  return <div className="modal-backdrop" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
+    <section className="modal-card" role="dialog" aria-modal="true" aria-labelledby="upload-title">
+      <div className="modal-header"><div><div className="eyebrow">PROJECT BUILD</div><h2 id="upload-title">Upload APK</h2></div><button className="icon-button" onClick={onClose} aria-label="Close"><X size={18} /></button></div>
+      <p className="modal-description">Uploads are stored in quarantine. PocketLab reads the package and version from the APK manifest; a build cannot be queued until it is approved.</p>
+      <form onSubmit={submit} className="form-stack">
+        <label className="upload-drop"><Upload size={20} /><strong>{file?.name ?? 'Choose an APK file'}</strong><span>{file ? bytes(file.size) : 'APK up to 100 MB'}</span><input type="file" accept=".apk,application/vnd.android.package-archive" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></label>
+        <label className="field-label" htmlFor="package-name">Expected package name <span className="muted">(optional)</span></label>
+        <input id="package-name" value={packageName} onChange={(e) => setPackageName(e.target.value)} placeholder="Read from APK manifest" />
+        <p className="field-help">Leave blank to detect it automatically. If entered, it must match the APK and the project package.</p>
+        <label className="field-label" htmlFor="version-name">Version name <span className="muted">(optional override)</span></label>
+        <input id="version-name" value={version} onChange={(e) => setVersion(e.target.value)} placeholder="Read from APK manifest" />
+        {busy && <div className="upload-progress"><KineticTextLoader message="Uploading APK..." compact /><span>{progress}%</span></div>}
+        {error && <div className="form-error" role="alert">{error}</div>}
+        <div className="modal-actions"><button className="button button-secondary" type="button" onClick={onClose} disabled={busy}>Cancel</button><button className="button button-primary" type="submit" disabled={busy}><FileUp size={16} /> {busy ? 'Uploading...' : 'Upload to quarantine'}</button></div>
+      </form>
+    </section>
+  </div>
 }
 
 export default function ProjectsPage() {

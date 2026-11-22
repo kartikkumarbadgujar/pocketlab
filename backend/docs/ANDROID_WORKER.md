@@ -26,7 +26,8 @@ dashboard's `prepare`/`execute`/`cancel` calls return `202` and the worker does 
 | Linux x86_64 | KVM (`/dev/kvm` readable/writable by the worker user) | Required for the netem gateway (packet loss, jitter distribution, DNS failure). Use a **dedicated** VM or host. |
 
 Minimum for one 2 GB emulator: 4 free host RAM GB (guest + ~1.5 GB emulator overhead), 2 logical CPUs, 8 GB free disk
-in the work directory. The worker refuses to start an emulator if the host cannot reserve this.
+in the work directory. API 37 and newer requires a 4 GB guest and a 6 GB data filesystem, so reserve at least 5.5 GB
+host RAM and 8 GB free disk for those images. The worker refuses to start an emulator if the host cannot reserve this.
 
 ## 2. Install the Android SDK pieces
 
@@ -61,7 +62,9 @@ cd backend
 .\.venv\Scripts\python.exe -m app.workers.emulator_runner --capabilities
 ```
 
-`emulator`, `adb`, `virtualization` must be `available` and at least one image must be listed. Anything shown as
+`emulator`, `adb`, `virtualization` must be `available` and at least one image must be listed. `avdmanager` is optional;
+the worker writes a validated, run-scoped AVD config when that tool is missing. API 37+ phone images need at least
+4 GB RAM and 6 GB for `/data`; the dashboard fills those minimums from the installed worker image list. Anything shown as
 `requires_linux_gateway` or `requires_physical_device` will be reported as *not applied* in runs.
 
 ## 4. End-to-end run (hackathon flow)
@@ -89,7 +92,8 @@ EXECUTING → COLLECTING_METRICS → ANALYZING → COMPLETED → CLEANING → CL
 
 * One emulator job per host (file lock). Unique AVD name and console/adb port pair per run attempt.
 * AVDs live in `POCKETLAB_WORK_DIR/avd` (a dedicated `ANDROID_AVD_HOME`); Android Studio AVDs are never listed,
-  modified or deleted. Every AVD boots with `-wipe-data -no-snapshot`, so no state leaks between runs.
+  modified or deleted. Every attempt gets a new AVD and boots without snapshots. Its new userdata image is already
+  clean, so the worker skips the redundant `-wipe-data` copy before boot.
 * Cleanup always runs: storage fill removed and verified, memory workload unmounted, battery saver reset, shaping
   removed, emulator stopped (console `kill`, then process termination), AVD and run directory deleted.
 * Abandoned work: a lease that stops heart-beating expires after 90 s and the run is retried (max 3 attempts). A
@@ -146,7 +150,7 @@ uninstalled after the run.
 | Symptom | Check |
 |---|---|
 | `virtualization unavailable` | `emulator -accel-check`; enable WHPX/KVM; nested virtualization in cloud VMs |
-| Boot timeout | Increase `POCKETLAB_BOOT_TIMEOUT_S`; first boots with `-wipe-data` are slow; check `emulator.log` artifact |
+| Boot timeout | Increase `POCKETLAB_BOOT_TIMEOUT_S`; first boots of a new API image take longer; check `emulator.log` artifact |
 | Memory pressure `requires_rootable_image` | Install a `google_apis` image for the selected API |
 | Network RTT/loss `UNAVAILABLE` | The emulator's user-mode network often drops ICMP; this is reported, not estimated |
 | Scenario `blocked` | Add the UI binding named in the reason, or request the condition the scenario needs |

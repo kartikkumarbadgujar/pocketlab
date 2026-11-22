@@ -8,6 +8,8 @@ and an authorized test APK you own. Enable explicitly:
     $env:POCKETLAB_TEST_APK = "C:\\path\\to\\your-demo-app.apk"
     $env:POCKETLAB_TEST_PACKAGE = "com.yourteam.demo"
     $env:POCKETLAB_TEST_API = "30"            # must match an installed google_apis image
+    $env:POCKETLAB_TEST_RAM_MB = "2048"
+    $env:POCKETLAB_TEST_DATA_PARTITION_MB = "4096"
     pytest -m real_emulator -s tests/integration
 
 It runs the full lifecycle (preflight, AVD, boot, verification, install, conditions, scenario, collection,
@@ -46,6 +48,10 @@ class LocalReporter:
 
     def conditions(self, records):
         self.conditions_list += records
+        for record in records:
+            print(f"  condition {record.parameter_key}: {record.application_status.value}; requested={record.requested_value!r}; observed={record.observed_value!r}")
+            if record.application_status is ApplicationStatus.FAILED:
+                print(f"    evidence: {record.evidence}")
 
     def measurements(self, records, device_id):
         self.metrics += records
@@ -88,10 +94,13 @@ def test_full_real_emulator_lifecycle(tmp_path):
     steps = [{"step_order": i, "action_type": s["action"], "configuration": s.get("config", {}), "expected": s.get("expect", {})}
              for i, s in enumerate(definition["steps"])]
     request = EnvironmentRequest.model_validate({
-        "device": {"api_level": int(os.environ.get("POCKETLAB_TEST_API", "30")), "ram_mb": 2048, "data_partition_mb": 2048},
+        "device": {"api_level": int(os.environ.get("POCKETLAB_TEST_API", "30")),
+                   "ram_mb": int(os.environ.get("POCKETLAB_TEST_RAM_MB", "2048")),
+                   "data_partition_mb": int(os.environ.get("POCKETLAB_TEST_DATA_PARTITION_MB", "4096"))},
         "storage": {"free_target_mb": 400},
         "network": {"download_kbps": 1500, "upload_kbps": 500, "latency_ms": 180},
         "battery": {"level_pct": 20, "charging": False, "ac_connected": False},
+        "strict_conditions": os.environ.get("POCKETLAB_TEST_STRICT_CONDITIONS", "1") != "0",
     })
     job = RunJob(run_id=990001, attempt=1, environment_id=1, environment_type="emulator", request=request, package_name=package,
                  apk_sha256=hashlib.sha256(apk.read_bytes()).hexdigest(),

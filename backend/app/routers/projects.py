@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
 from app.dependencies import current_user
+from app.emulator.adb_manager import validate_package
+from app.emulator.apk_manifest import ManifestInfo
 from app.models import AppBuild, AuditLog, Device, Project, User
 from app.schemas.api import DeviceInput, ProjectInput
 from app.services import blob
@@ -19,7 +21,7 @@ from app.services.ownership import owned_project
 class UploadedBuildInput(BaseModel):
     url: str = Field(max_length=1024)
     pathname: str = Field(max_length=255)
-    package_name: str = Field(min_length=1, max_length=255)
+    package_name: str | None = Field(default=None, max_length=255)
     version_name: str | None = Field(default=None, max_length=100)
     version_code: int | None = None
 
@@ -49,7 +51,7 @@ def approve_own_build(project_id: int, build_id: int, data: BuildApprovalInput, 
     if build.scan_status == "rejected":
         raise HTTPException(409, "A rejected build cannot be approved; upload it again")
     if build.apk_storage_key.startswith(blob.BLOB_PREFIX):
-        digest, _ = validate_blob_apk(build.apk_storage_key[len(blob.BLOB_PREFIX):])
+        digest, _, _ = validate_blob_apk(build.apk_storage_key[len(blob.BLOB_PREFIX):])
     else:
         path = (Path(settings.upload_dir).resolve() / build.apk_storage_key).resolve()
         if not path.is_file():
@@ -115,12 +117,30 @@ def get_device(device_id: int, db: Session = Depends(get_db), user: User = Depen
 
 
 @router.post("/api/v1/projects/{project_id}/builds", status_code=201)
-async def upload_build(project_id: int, version_name: str | None = Form(None), version_code: int | None = Form(None), package_name: str = Form(...), file: UploadFile = File(...), db: Session = Depends(get_db), user: User = Depends(current_user)):
+async def upload_build(project_id: int, version_name: str | None = Form(None), version_code: int | None = Form(None), package_name: str | None = Form(None), file: UploadFile = File(...), db: Session = Depends(get_db), user: User = Depends(current_user)):
     project = owned_project(db, project_id, user.id)
-    if project.application_package and project.application_package != package_name:
-        raise HTTPException(422, "Build package does not match the project application package")
-    key, digest, size = await validate_and_store_apk(file)
-    return _save_build(db, user, project_id, version_name, version_code, package_name, digest, key, size)
+    key, digest, size, manifest = await validate_and_store_apk(file)
+    try:
+        package, version, code = _build_metadata(project, package_name, version_name, version_code, manifest)
+    except HTTPException:
+        (Path(settings.upload_dir).resolve() / key).unlink(missing_ok=True)
+        raise
+    return _save_build(db, user, project_id, version, code, package, digest, key, size)
+
+
+def _build_metadata(project: Project, declared_package: str | None, version_name: str | None,
+                    version_code: int | None, manifest: ManifestInfo) -> tuple[str, str | None, int | None]:
+    package = manifest.package
+    try:
+        validate_package(package)
+    except ValueError as exc:
+        raise HTTPException(400, "APK manifest contains an invalid Android package name") from exc
+    declared_package = declared_package.strip() if declared_package else None
+    if declared_package and declared_package != package:
+        raise HTTPException(422, f"APK manifest package '{package}' does not match the supplied package name '{declared_package}'")
+    if project.application_package and project.application_package != package:
+        raise HTTPException(422, f"APK manifest package '{package}' does not match this project's package '{project.application_package}'")
+    return package, version_name or manifest.version_name, version_code if version_code is not None else manifest.version_code
 
 
 def _save_build(db: Session, user: User, project_id: int, version_name: str | None, version_code: int | None, package_name: str, digest: str, key: str, size: int) -> dict:
@@ -156,12 +176,13 @@ def register_uploaded_build(project_id: int, data: UploadedBuildInput, db: Sessi
     if db.scalar(select(AppBuild.id).where(AppBuild.apk_storage_key == key)):
         raise HTTPException(409, "This upload is already registered")
     try:
-        digest, size = validate_blob_apk(data.url)
+        digest, size, manifest = validate_blob_apk(data.url)
+        package, version, code = _build_metadata(project, data.package_name, data.version_name, data.version_code, manifest)
     except HTTPException as exc:
-        if exc.status_code in (400, 413):
+        if exc.status_code in (400, 413, 422):
             blob.delete(data.url)
         raise
-    return _save_build(db, user, project_id, data.version_name, data.version_code, data.package_name, digest, key, size)
+    return _save_build(db, user, project_id, version, code, package, digest, key, size)
 
 
 @router.get("/api/v1/projects/{project_id}/builds")

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import platform
 import shutil
 import sys
@@ -42,6 +43,17 @@ def build_runner(settings: WorkerSettings, sdk: AndroidSdk | None) -> ProcessRun
     if sys.platform.startswith("linux") and settings.netem_enabled:
         for tool in ("ip", "tc", "sudo"):
             runner.allow(tool, shutil.which(tool))
+    # Give every ADB subprocess the same explicit host key. Windows worker processes launched
+    # outside an interactive shell otherwise may start adb without loading the user's key and
+    # leave a fresh emulator stuck in the "unauthorized" state.
+    adb_vendor_keys = os.environ.get("ADB_VENDOR_KEYS")
+    if not adb_vendor_keys:
+        android_user_home = os.environ.get("ANDROID_USER_HOME")
+        key_file = (Path(android_user_home) if android_user_home else Path.home() / ".android") / "adbkey"
+        if key_file.is_file():
+            adb_vendor_keys = str(key_file)
+    if adb_vendor_keys:
+        runner.base_env["ADB_VENDOR_KEYS"] = adb_vendor_keys
     return runner
 
 

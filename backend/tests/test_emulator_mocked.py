@@ -5,7 +5,6 @@ safety rules, command construction, expectation logic and lifecycle/cleanup orde
 that real emulator execution works - see tests/integration/test_real_emulator.py for that.
 """
 import json
-import struct
 import zipfile
 
 import pytest
@@ -15,8 +14,9 @@ from app.emulator.adb_manager import AdbManager
 from app.emulator.apk_manifest import manifest_from_apk, parse_aapt2_badging
 from app.emulator.avd_manager import AvdManager
 from app.emulator.battery_manager import parse_dumpsys_battery, parse_saver
+from app.emulator.capability_detector import build_runner
 from app.emulator.console_manager import validate_console_command
-from app.emulator.emulator_config import AndroidSdk, avd_name_for_run, build_avd_spec, emulator_netdelay, emulator_netspeed
+from app.emulator.emulator_config import AndroidSdk, WorkerSettings, avd_name_for_run, build_avd_spec, emulator_netdelay, emulator_netspeed
 from app.emulator.emulator_monitor import detect_failures
 from app.emulator.exceptions import CommandNotAllowedError, EmulatorError, SdkNotFoundError, UnsafeConditionError
 from app.emulator.measurement_collector import parse_am_start, parse_displayed, parse_gfxinfo, parse_proc_stat_pair
@@ -29,6 +29,7 @@ from app.emulator.schemas import (
 )
 from app.emulator.storage_manager import StorageManager, parse_df, parse_statfs
 from app.emulator.thermal_manager import ThermalManager, parse_thermalservice
+from tests.apk_factory import build_axml
 
 pytestmark = pytest.mark.mocked
 IMAGE = SystemImageInfo(package="system-images;android-30;google_apis;x86_64", api_level=30, tag="google_apis", abi="x86_64", rootable=True)
@@ -59,6 +60,14 @@ def test_process_runner_rejects_unlisted_executables_and_nul(tmp_path):
     runner.allow("adb", exe)
     with pytest.raises(CommandNotAllowedError):
         runner.run([str(exe), "shell", "a\x00b"])
+
+
+def test_worker_passes_explicit_adb_vendor_key_to_subprocesses(tmp_path, monkeypatch):
+    key_file = tmp_path / "adbkey"
+    key_file.write_text("test key path")
+    monkeypatch.setenv("ADB_VENDOR_KEYS", str(key_file))
+    runner = build_runner(WorkerSettings(), None)
+    assert runner.base_env["ADB_VENDOR_KEYS"] == str(key_file.resolve())
 
 
 def test_device_quote_neutralises_shell_metacharacters():
@@ -102,8 +111,17 @@ def test_sdk_discovery_requires_explicit_location(tmp_path, monkeypatch):
     play = tmp_path / "system-images/android-34/google_apis_playstore/x86_64"
     play.mkdir(parents=True)
     (play / "source.properties").write_text("AndroidVersion.ApiLevel=34\nSystemImage.TagId=google_apis_playstore\nSystemImage.Abi=x86_64\n")
+    latest = tmp_path / "system-images/android-37.0/google_apis_playstore/x86_64"
+    latest.mkdir(parents=True)
+    (latest / "source.properties").write_text("AndroidVersion.ApiLevel=37.0\nSystemImage.TagId=google_apis_playstore\nSystemImage.Abi=x86_64\n")
     sdk = AndroidSdk.locate(tmp_path)
-    assert [(i.api_level, i.tag, i.rootable) for i in sdk.system_images()] == [(30, "google_apis", True), (34, "google_apis_playstore", False)]
+    images = sdk.system_images()
+    assert [(i.api_level, i.tag, i.rootable) for i in images] == [(30, "google_apis", True), (34, "google_apis_playstore", False), (37, "google_apis_playstore", False)]
+    assert images[2].system_dir == "system-images/android-37.0/google_apis_playstore/x86_64/"
+    api37 = build_avd_spec(EnvironmentRequest.model_validate({"device": {"api_level": 37}}), images[2],
+                           "pocketlab_run_37_a1_x", gpu_mode="swiftshader_indirect", headless=True, port=5570)
+    assert api37.config["image.sysdir.1"] == images[2].system_dir
+    assert "system_dir" not in images[2].model_dump()
     assert sdk.adb is None   # nothing pretends tools exist
 
 
@@ -113,8 +131,9 @@ def test_avd_spec_carries_requested_hardware_and_network():
     spec = build_avd_spec(req, IMAGE, "pocketlab_run_1_a1_x", gpu_mode="swiftshader_indirect", headless=True, port=5560)
     assert spec.config["hw.ramSize"] == "2048" and spec.config["disk.dataPartition.size"] == "2048M" and spec.config["vm.heapSize"] == "192"
     args = spec.launch_args
-    assert args[args.index("-memory") + 1] == "2048" and args[args.index("-netspeed") + 1] == "500:1500" and args[args.index("-netdelay") + 1] == "140:220"
-    assert "-wipe-data" in args and "-no-snapshot" in args and "-no-window" in args
+    assert args[args.index("-memory") + 1] == "2048"
+    assert args[args.index("-netspeed") + 1] == "500:1500" and args[args.index("-netdelay") + 1] == "140:220"
+    assert "-wipe-data" not in args and "-no-snapshot" in args and "-no-window" in args
     assert emulator_netspeed(NetworkCondition()) is None and emulator_netdelay(NetworkCondition(latency_ms=50)) == "50:50"
 
 
@@ -137,6 +156,23 @@ def test_planner_physical_device_cannot_be_reconfigured_or_shaped():
     assert outcomes["thermal.throttling_validation"] == "will_apply"
 
 
+def test_planner_supports_api_37_without_optional_avdmanager():
+    report = CapabilityReport.model_validate({
+        "host": {"arch": "amd64", "ram_available_mb": 12000, "disk_free_mb": 20000},
+        "tools": {k: {"status": "available"} for k in ("android_sdk", "adb", "emulator", "virtualization")},
+        "system_images": [{"package": "system-images;android-37;google_apis_playstore;x86_64", "api_level": 37,
+                           "tag": "google_apis_playstore", "abi": "x86_64", "rootable": False}],
+    })
+    request = EnvironmentRequest.model_validate({"device": {"api_level": 37, "ram_mb": 4096, "data_partition_mb": 6144}})
+    plan = planner.plan_environment(request, report)
+    assert plan.ok and plan.selected_system_image.api_level == 37
+    assert any("command-line tools are unavailable" in warning for warning in plan.warnings)
+    too_small = planner.plan_environment(EnvironmentRequest.model_validate({"device": {"api_level": 37, "ram_mb": 2048}}), report)
+    assert not too_small.ok and any("requires at least 4096 MB guest RAM" in error for error in too_small.blocking_errors)
+    too_small_data = planner.plan_environment(EnvironmentRequest.model_validate({"device": {"api_level": 37, "ram_mb": 4096, "data_partition_mb": 4096}}), report)
+    assert not too_small_data.ok and any("provisions a 6 GB data filesystem" in error for error in too_small_data.blocking_errors)
+
+
 def test_measurement_records_refuse_fabrication():
     with pytest.raises(ValueError):
         MeasurementRecord(parameter_key="cpu.temperature_c", value=40.0, source="android_api", status=MeasurementStatus.UNSUPPORTED, collection_method="x")
@@ -147,31 +183,6 @@ def test_measurement_records_refuse_fabrication():
 
 
 # APK manifest
-def build_axml(package: str, version_code: int, version_name: str, min_sdk: int) -> bytes:
-    strings = ["versionCode", "versionName", "minSdkVersion", "package", "manifest", "uses-sdk", version_name, package]
-    body = b""
-    offsets = []
-    for s in strings:
-        offsets.append(len(body))
-        body += struct.pack("<H", len(s)) + s.encode("utf-16-le") + b"\x00\x00"
-    body += b"\x00" * (-len(body) % 4)
-    header = 28
-    pool = struct.pack("<HHIIIIII", 0x0001, header, header + 4 * len(strings) + len(body), len(strings), 0, 0, header + 4 * len(strings), 0)
-    pool += struct.pack(f"<{len(strings)}I", *offsets) + body
-    resmap = struct.pack("<HHI3I", 0x0180, 8, 20, 0x0101021B, 0x0101021C, 0x0101020C)
-
-    def element(name_idx, attrs):
-        payload = struct.pack("<IIHHHHHH", 0xFFFFFFFF, name_idx, 20, 20, len(attrs), 0, 0, 0)
-        for a_name, raw, dtype, data in attrs:
-            payload += struct.pack("<IIIHBBI", 0xFFFFFFFF, a_name, raw, 8, 0, dtype, data)
-        return struct.pack("<HHIII", 0x0102, 16, 16 + len(payload), 1, 0xFFFFFFFF) + payload
-
-    manifest = element(4, [(0, 0xFFFFFFFF, 0x10, version_code), (1, 6, 0x03, 6), (3, 7, 0x03, 7)])
-    uses_sdk = element(5, [(2, 0xFFFFFFFF, 0x10, min_sdk)])
-    content = pool + resmap + manifest + uses_sdk
-    return struct.pack("<HHI", 0x0003, 8, 8 + len(content)) + content
-
-
 def test_binary_manifest_parser(tmp_path):
     apk = tmp_path / "app.apk"
     with zipfile.ZipFile(apk, "w") as archive:
@@ -362,8 +373,13 @@ def steps_of(key):
 
 def test_cold_startup_passes_only_with_evaluated_expectations(tmp_path, monkeypatch):
     monkeypatch.setattr("time.sleep", lambda s: None)
-    result = make_executor(tmp_path, AppSim()).run(1, "Cold application startup", 2, steps_of("cold_startup"))
+    executor = make_executor(tmp_path, AppSim())
+    progress = []
+    executor.ctx.emit_event = lambda *args: progress.append(args)
+    result = executor.run(1, "Cold application startup", 2, steps_of("cold_startup"))
     assert result.status == "passed", result.reason
+    assert [event[0] for event in progress].count("scenario_step_started") == len(result.steps)
+    assert [event[0] for event in progress].count("scenario_step_finished") == len(result.steps)
     keys = {m.parameter_key: m for m in result.measurements}
     assert keys["performance.startup_cold_ms"].value == 1450 and keys["performance.startup_cold_ms"].status is MeasurementStatus.ACTUAL
     assert keys["performance.ttfd_ms"].status is MeasurementStatus.UNAVAILABLE      # app did not report fully drawn

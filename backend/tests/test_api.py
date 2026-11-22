@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
-import io, zipfile
+import io
 import pytest
+from tests.apk_factory import valid_apk_bytes
 from app.schemas.api import MeasurementInput, ProfileInput
 from app.services.impact import estimate_impact
 from app.collectors.measurements import unavailable
@@ -125,13 +126,20 @@ def test_apk_validation_rejects_non_zip(client,auth_headers):
 
 def test_valid_apk_is_hashed_and_quarantined(client,auth_headers):
     headers,_=auth_headers;project=client.post("/api/v1/projects",json={"name":"apk-valid"},headers=headers).json()
-    stream=io.BytesIO()
-    with zipfile.ZipFile(stream,"w") as archive:archive.writestr("AndroidManifest.xml",b"placeholder manifest")
-    response=client.post(f"/api/v1/projects/{project['id']}/builds",data={"package_name":"com.example.app"},files={"file":("app.apk",stream.getvalue(),"application/vnd.android.package-archive")},headers=headers)
+    response=client.post(f"/api/v1/projects/{project['id']}/builds",files={"file":("app.apk",valid_apk_bytes(),"application/vnd.android.package-archive")},headers=headers)
     assert response.status_code==201
     assert response.json()["scan_status"]=="quarantined" and len(response.json()["apk_sha256"])==64
+    assert response.json()["package_name"] == "com.example.app" and response.json()["version_name"] == "1.4.2"
     queued=client.post("/api/v1/test-runs",json={"project_id":project["id"],"app_build_id":response.json()["id"]},headers=headers)
     assert queued.status_code==409
+
+
+def test_apk_manifest_package_mismatch_is_rejected_at_upload(client, auth_headers):
+    headers, _ = auth_headers
+    project = client.post("/api/v1/projects", json={"name": "apk-package-check"}, headers=headers).json()
+    response = client.post(f"/api/v1/projects/{project['id']}/builds", data={"package_name": "com.wrong.app"},
+                           files={"file": ("app.apk", valid_apk_bytes(), "application/vnd.android.package-archive")}, headers=headers)
+    assert response.status_code == 422 and "manifest package 'com.example.app'" in response.json()["detail"]
 
 
 def test_impact_estimation_formula_and_uncertainty():

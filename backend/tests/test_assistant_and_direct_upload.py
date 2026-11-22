@@ -1,5 +1,4 @@
 import io
-import zipfile
 
 import httpx
 import pytest
@@ -7,6 +6,7 @@ import pytest
 from app.config import settings
 from app.routers import assistant as assistant_router
 from app.services import blob
+from tests.apk_factory import valid_apk_bytes
 
 
 def _project(client, headers):
@@ -73,10 +73,7 @@ def test_upload_token_and_register_uploaded_build(client, auth_headers, monkeypa
     grant = client.post(f"/api/v1/projects/{pid}/builds/upload-token", headers=headers).json()
     assert grant["pathname"].startswith(f"quarantine/p{pid}/") and grant["client_token"].startswith("vercel_blob_client_StoreAbc123_")
 
-    data = io.BytesIO()
-    with zipfile.ZipFile(data, "w") as z:
-        z.writestr("AndroidManifest.xml", b"manifest")
-    apk = data.getvalue()
+    apk = valid_apk_bytes()
 
     def fake_download(url, target, max_bytes):
         target.write(apk)
@@ -84,7 +81,7 @@ def test_upload_token_and_register_uploaded_build(client, auth_headers, monkeypa
 
     monkeypatch.setattr(blob, "download_to", fake_download)
     url = f"https://storeabc123.private.blob.vercel-storage.com/{grant['pathname']}"
-    body = {"url": url, "pathname": grant["pathname"], "package_name": "com.example.app"}
+    body = {"url": url, "pathname": grant["pathname"]}
     r = client.post(f"/api/v1/projects/{pid}/builds/from-upload", json=body, headers=headers)
     assert r.status_code == 201, r.text
     assert r.json()["scan_status"] == "quarantined" and r.json()["size_bytes"] == len(apk)

@@ -103,7 +103,7 @@ export const assistantApi = {
 export const buildsApi = {
   list: async (projectId: number, options?: RequestOptions) => (await api.get<Build[]>(`/projects/${projectId}/builds`, options)).data,
   approve: async (projectId: number, buildId: number, reason: string) => (await api.post<{ id: number; scan_status: string }>(`/projects/${projectId}/builds/${buildId}/approve`, { reason, confirm_authorized: true }, { timeout: 120_000 })).data,
-  upload: async (projectId: number, file: File, packageName: string, versionName?: string, versionCode?: number, onProgress?: (value: number) => void, options?: RequestOptions) => {
+  upload: async (projectId: number, file: File, packageName?: string, versionName?: string, versionCode?: number, onProgress?: (value: number) => void, options?: RequestOptions) => {
     // Hosted (serverless) API: upload straight to private Blob storage, then register the file. A 404 from the token
     // endpoint means the server stores uploads itself, so fall through to the multipart upload below.
     let grant: { pathname: string; client_token: string; maximum_size_bytes: number } | null = null
@@ -113,11 +113,12 @@ export const buildsApi = {
       if (file.size > grant.maximum_size_bytes) throw new Error(`APK is larger than the ${Math.round(grant.maximum_size_bytes / 1048576)} MB limit.`)
       const { put } = await import('@vercel/blob/client')
       const stored = await put(grant.pathname, file, { access: 'private', token: grant.client_token, contentType: 'application/vnd.android.package-archive', multipart: file.size > 8 * 1048576, abortSignal: options?.signal, onUploadProgress: ({ percentage }) => onProgress?.(Math.min(99, Math.round(percentage))) })
-      const { data } = await api.post<BuildUpload>(`/projects/${projectId}/builds/from-upload`, { url: stored.url, pathname: grant.pathname, package_name: packageName, version_name: versionName || null, version_code: versionCode ?? null }, { signal: options?.signal, timeout: 120_000 })
+      const { data } = await api.post<BuildUpload>(`/projects/${projectId}/builds/from-upload`, { url: stored.url, pathname: grant.pathname, package_name: packageName?.trim() || null, version_name: versionName || null, version_code: versionCode ?? null }, { signal: options?.signal, timeout: 120_000 })
       onProgress?.(100)
       return data
     }
-    const form = new FormData(); form.append('file', file); form.append('package_name', packageName)
+    const form = new FormData(); form.append('file', file)
+    if (packageName?.trim()) form.append('package_name', packageName.trim())
     if (versionName) form.append('version_name', versionName)
     if (versionCode !== undefined) form.append('version_code', String(versionCode))
     return (await api.post<BuildUpload>(`/projects/${projectId}/builds`, form, { signal: options?.signal, onUploadProgress: (event) => { if (event.total) onProgress?.(Math.round(event.loaded / event.total * 100)) } })).data

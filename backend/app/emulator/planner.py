@@ -55,7 +55,9 @@ def plan_environment(req: EnvironmentRequest, report: CapabilityReport | None) -
     image: SystemImageInfo | None = None
 
     # host / tooling
-    required_tools = ["android_sdk", "adb"] + (["emulator", "avdmanager", "virtualization"] if emulator else [])
+    # avdmanager is optional: AvdManager has a safe direct-config path scoped to PocketLab's
+    # own AVD directory, so SDKs without command-line tools remain executable.
+    required_tools = ["android_sdk", "adb"] + (["emulator", "virtualization"] if emulator else [])
     for tool in required_tools:
         if not _available(report, tool):
             entry = report.tools.get(tool) or report.capabilities.get(tool)
@@ -63,6 +65,8 @@ def plan_environment(req: EnvironmentRequest, report: CapabilityReport | None) -
             result.blocking_errors.append(f"{tool.replace('_', ' ')} unavailable: {reason}")
 
     if emulator:
+        if not _available(report, "avdmanager"):
+            result.warnings.append("Android command-line tools are unavailable; the worker will create the disposable AVD from its validated config files.")
         image = select_system_image(req, report)
         result.selected_system_image = image
         if image is None:
@@ -70,6 +74,12 @@ def plan_environment(req: EnvironmentRequest, report: CapabilityReport | None) -
             result.blocking_errors.append(
                 f"No installed system image for API {req.device.api_level} ({tag}). Install it on the worker with: "
                 f"sdkmanager \"system-images;android-{req.device.api_level};{tag};x86_64\"")
+        if req.device.api_level >= 37 and req.device.ram_mb < 4096:
+            result.blocking_errors.append(
+                f"Android API 37 and newer requires at least 4096 MB guest RAM; {req.device.ram_mb} MB would be silently raised by the emulator. Select 4 GB or more.")
+        if req.device.api_level >= 37 and req.device.data_partition_mb < 6144:
+            result.blocking_errors.append(
+                f"This API 37 phone image provisions a 6 GB data filesystem; requesting {req.device.data_partition_mb} MB would fail read-back verification. Select 6 GB or more.")
         ram_free = report.host.get("ram_available_mb")
         needed = req.device.ram_mb + EMULATOR_HOST_RAM_OVERHEAD_MB
         if ram_free is None:
@@ -88,7 +98,7 @@ def plan_environment(req: EnvironmentRequest, report: CapabilityReport | None) -
             PlanItem(parameter_key="device.cpu_cores", requested_value=req.device.cpu_cores, outcome="will_apply",
                      mechanism="AVD hw.cpu.ncore + emulator -cores; verified from guest /sys/devices/system/cpu/online"),
             PlanItem(parameter_key="device.data_partition_mb", requested_value=req.device.data_partition_mb, unit="MB", outcome="will_apply",
-                     mechanism="AVD disk.dataPartition.size on a freshly wiped userdata; verified with statfs /data"),
+                     mechanism="AVD disk.dataPartition.size on newly created userdata; verified with statfs /data"),
             PlanItem(parameter_key="device.screen", requested_value=req.device.screen.model_dump(), outcome="will_apply",
                      mechanism="AVD hw.lcd.width/height/density; verified with wm size / wm density"),
         ]

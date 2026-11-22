@@ -114,7 +114,7 @@ class ScreenSpec(BaseModel):
 
 class DeviceSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    api_level: int = Field(30, ge=24, le=36)
+    api_level: int = Field(30, ge=24, le=100)
     system_image_tag: Literal["google_apis", "default", "google_apis_playstore", "aosp_atd", "google_atd"] | None = None
     abi: Literal["x86_64", "x86", "arm64-v8a"] | None = None
     ram_mb: int = Field(2048, ge=1024, le=8192)
@@ -319,6 +319,9 @@ class SystemImageInfo(BaseModel):
     tag: str
     abi: str
     rootable: bool
+    # Relative directory actually installed in this SDK (some SDK packages use android-37.0).
+    # Keep it local to the worker; it is deliberately omitted from API/capability JSON.
+    system_dir: str | None = Field(default=None, exclude=True, repr=False)
 
 
 class CapabilityReport(BaseModel):

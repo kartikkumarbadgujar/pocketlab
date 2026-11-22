@@ -41,7 +41,7 @@ class WorkerSettings:
     storage_reserve_mb: int = 200
     memory_floor_mb: int = 200
     host_ram_overhead_mb: int = 1536
-    gpu_mode: str = "swiftshader_indirect"
+    gpu_mode: str = "auto"
     headless: bool = True
     probe_host: str = "1.1.1.1"
     artifact_max_bytes: int = 50 * 1024 * 1024
@@ -77,7 +77,7 @@ class WorkerSettings:
             boot_timeout_s=int(os.environ.get("POCKETLAB_BOOT_TIMEOUT_S", 420)),
             storage_reserve_mb=int(os.environ.get("POCKETLAB_STORAGE_RESERVE_MB", 200)),
             memory_floor_mb=int(os.environ.get("POCKETLAB_MEMORY_FLOOR_MB", 200)),
-            gpu_mode=os.environ.get("POCKETLAB_EMULATOR_GPU", "swiftshader_indirect"),
+            gpu_mode=os.environ.get("POCKETLAB_EMULATOR_GPU", "auto"),
             headless=_env_bool("POCKETLAB_EMULATOR_HEADLESS", True),
             probe_host=os.environ.get("POCKETLAB_PROBE_HOST", "1.1.1.1"),
             physical_devices=devices,
@@ -126,14 +126,20 @@ class AndroidSdk:
         for props in base.glob("android-*/*/*/source.properties"):
             values = _read_properties(props)
             abi_dir = props.parent
+            api_value = values.get("AndroidVersion.ApiLevel", abi_dir.parent.parent.name.split("-")[-1])
             try:
-                api = int(values.get("AndroidVersion.ApiLevel", abi_dir.parent.parent.name.split("-")[-1]))
+                # Recent SDK packages encode this as e.g. "37.0". The API level is still
+                # an integer; extension levels are reported separately in source.properties.
+                if not re.fullmatch(r"\d+(?:\.0+)?", api_value):
+                    continue
+                api = int(float(api_value))
             except ValueError:
                 continue
             tag = values.get("SystemImage.TagId", abi_dir.parent.name)
             abi = values.get("SystemImage.Abi", abi_dir.name)
             images.append(SystemImageInfo(package=f"system-images;android-{api};{tag};{abi}", api_level=api, tag=tag, abi=abi,
-                                          rootable=tag in ("google_apis", "default", "aosp_atd", "google_atd")))
+                                          rootable=tag in ("google_apis", "default", "aosp_atd", "google_atd"),
+                                          system_dir=abi_dir.relative_to(self.root).as_posix().rstrip("/") + "/"))
         return sorted(images, key=lambda i: (i.api_level, i.tag, i.abi))
 
 
@@ -208,7 +214,7 @@ def build_avd_spec(req: EnvironmentRequest, image: SystemImageInfo, name: str, *
         "avd.ini.encoding": "UTF-8",
         "abi.type": image.abi,
         "hw.cpu.arch": {"x86_64": "x86_64", "x86": "x86", "arm64-v8a": "arm64"}[image.abi],
-        "image.sysdir.1": f"system-images/android-{image.api_level}/{image.tag}/{image.abi}/",
+        "image.sysdir.1": image.system_dir or f"system-images/android-{image.api_level}/{image.tag}/{image.abi}/",
         "tag.id": image.tag,
         "target": f"android-{image.api_level}",
         "hw.ramSize": f"{d.ram_mb}",
@@ -234,9 +240,11 @@ def build_avd_spec(req: EnvironmentRequest, image: SystemImageInfo, name: str, *
         config["vm.heapSize"] = str(d.vm_heap_mb)
     if d.sdcard_mb:
         config["sdcard.size"] = f"{d.sdcard_mb}M"
+    # Every attempt gets a new AVD name and a newly-created userdata image. It is already
+    # pristine, so asking the emulator to wipe it again only adds work to the first boot.
     args = ["-avd", name, "-port", str(port),
             "-memory", str(d.ram_mb), "-cores", str(d.cpu_cores),
-            "-no-snapshot", "-wipe-data", "-no-boot-anim", "-no-audio",
+            "-no-snapshot", "-no-boot-anim", "-no-audio",
             "-gpu", gpu_mode, "-accel", "auto"]
     if headless:
         args.append("-no-window")
