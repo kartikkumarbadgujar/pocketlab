@@ -4,6 +4,7 @@ import { AuthProvider } from './auth/AuthContext'
 import { useAuth } from './auth/useAuth'
 import AppShell from './components/AppShell'
 import KineticTextLoader from './components/KineticTextLoader'
+import GlowCursor from './components/GlowCursor'
 
 const LoginPage = lazy(() => import('./pages/LoginPage'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
@@ -20,7 +21,8 @@ const HelpPage = lazy(() => import('./pages/HelpPage'))
 
 function ProtectedRoute() { const { isAuthenticated } = useAuth(); return isAuthenticated ? <Outlet /> : <Navigate to="/login" replace /> }
 export default function App() {
-  return <AuthProvider><Suspense fallback={<div className="route-loading"><KineticTextLoader message="Loading PocketLab..." /></div>}><Routes><Route path="/login" element={<LoginPage />} /><Route element={<ProtectedRoute />}><Route element={<AppShell />}>
+  return <AuthProvider><><GlowCursor /><Suspense fallback={<div className="route-loading"><KineticTextLoader message="Loading PocketLab..." /></div>}><Routes><Route path="/login" element={<LoginPage />} /><Route element={<ProtectedRoute />}><Route element={<AppShell />}>
     <Route index element={<DashboardPage />} /><Route path="projects" element={<ProjectsPage />} /><Route path="devices" element={<DevicesPage />} /><Route path="profiles" element={<ProfilesPage />} /><Route path="scenarios" element={<ScenariosPage />} /><Route path="test-lab" element={<TestLabPage />} /><Route path="runs/:runId/live" element={<LiveRunPage />} /><Route path="runs/:runId" element={<RunDetailsPage />} /><Route path="findings" element={<FindingsPage />} /><Route path="reports" element={<ReportsPage />} /><Route path="help" element={<HelpPage />} />
-  </Route></Route><Route path="*" element={<Navigate to="/" replace />} /></Routes></Suspense></AuthProvider>
+  </Route></Route><Route path="*" element={<Navigate to="/" replace />} /></Routes></Suspense></></AuthProvider>
 }
+
