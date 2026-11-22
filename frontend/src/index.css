@@ -320,9 +320,32 @@ body,.app-shell,.app-main { background: #FAFAFA; color: #09090B; }
 .dock-link.active { color: #09090B; background: #F4F4F5; }
 button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible { outline-color: rgba(15,118,110,.32); }
 
-.build-approval { margin-top: 14px; padding: 14px 16px; display: grid; gap: 10px; border: 1px solid #e9d8a6; border-radius: 12px; background: #fffaf0; }
-.build-approval-head { display: flex; align-items: center; gap: 8px; color: var(--amber); }
-.build-approval-head strong { color: var(--ink); }
-.build-approval p { margin: 0; color: var(--muted); font-size: 13px; }
-.build-approval-target { font-size: 13px; color: var(--ink); overflow-wrap: anywhere; }
-.build-approval .button { justify-self: start; }
+/* Always-available floating route dock; item names appear on hover or focus. */
+.page-content { padding-bottom: 100px; }
+.floating-dock {
+  position: fixed; z-index: 22; left: 50%; bottom: 16px; transform: translateX(-50%);
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  width: max-content; max-width: calc(100% - 24px); padding: 6px;
+  background: #fff; border: 1px solid #E4E4E7; border-radius: 8px; box-shadow: none;
+}
+.dock-link {
+  position: relative; min-width: 42px; height: 36px; display: grid; place-items: center;
+  padding: 0 10px; border-radius: 6px; color: #52525B; background: transparent;
+  font-size: 10px; transition: color .14s ease, background .14s ease;
+}
+.dock-link:hover,.dock-link:focus-visible { color: #09090B; background: #F4F4F5; }
+.dock-link.active { color: #0F766E; background: #F4F4F5; }
+.dock-link span {
+  position: absolute; left: 50%; bottom: calc(100% + 8px); transform: translate(-50%,4px);
+  padding: 5px 8px; color: #52525B; background: #fff; border: 1px solid #E4E4E7;
+  border-radius: 6px; font-size: 10px; line-height: 1.2; white-space: nowrap;
+  opacity: 0; pointer-events: none; transition: opacity .14s ease, transform .14s ease;
+}
+.dock-link:hover span,.dock-link:focus-visible span,.dock-link.active span {
+  opacity: 1; transform: translate(-50%,0);
+}
+@media (max-width: 850px) {
+  .floating-dock { width: min(calc(100% - 24px),560px); justify-content: space-around; bottom: max(10px,env(safe-area-inset-bottom)); }
+  .dock-link { min-width: 38px; padding: 0 8px; }
+}
+
