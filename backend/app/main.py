@@ -23,7 +23,7 @@ async def lifespan(app:FastAPI):
 
 app=FastAPI(title="PocketLab API",version="1.0.0",description="Backend for constrained Android application testing.",lifespan=lifespan)
 app.add_middleware(TrustedHostMiddleware,allowed_hosts=settings.trusted_hosts)
-app.add_middleware(CORSMiddleware,allow_origins=settings.cors_origins,allow_credentials=True,allow_methods=["GET","POST","PUT","DELETE","OPTIONS"],allow_headers=["Authorization","Content-Type","Idempotency-Key"],expose_headers=["Content-Disposition"])
+app.add_middleware(CORSMiddleware,allow_origins=settings.cors_origins,allow_origin_regex=settings.cors_origin_regex,allow_credentials=True,allow_methods=["GET","POST","PUT","DELETE","OPTIONS"],allow_headers=["Authorization","Content-Type","Idempotency-Key"],expose_headers=["Content-Disposition"])
 
 # Small per-process sliding window limiter. Production deployments behind multiple workers should use a shared gateway/Redis limiter.
 _requests=defaultdict(deque)

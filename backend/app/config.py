@@ -14,11 +14,22 @@ class Settings(BaseSettings):
     refresh_token_days: int = 30
     runner_token: str
     cors_origins: list[str] = ["http://localhost:3000"]
+    # Optional regex for hosted frontends whose exact hostname is assigned by the platform (e.g. a Render suffix).
+    cors_origin_regex: str | None = None
     trusted_hosts: list[str] = ["localhost", "127.0.0.1", "testserver"]
     upload_dir: str = "./private_uploads"
     max_apk_size_bytes: int = 104857600
     rate_limit: str = "120/minute"
     log_level: str = "INFO"
+
+    @field_validator("database_url")
+    @classmethod
+    def use_psycopg3_driver(cls, value: str) -> str:
+        # Hosting platforms hand out postgres:// or postgresql:// URLs; SQLAlchemy would then pick psycopg2, which is not installed.
+        for prefix in ("postgres://", "postgresql://"):
+            if value.startswith(prefix):
+                return "postgresql+psycopg://" + value[len(prefix):]
+        return value
 
     @field_validator("jwt_secret")
     @classmethod
