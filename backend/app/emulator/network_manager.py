@@ -213,24 +213,35 @@ class NetemGateway(NetworkShaper):
         self._ip("netns", "exec", self.ns, str(self.runner.path("tc")), "qdisc", "replace", "dev", self.ns_if, "root", *egress)
         self._tc("qdisc", "replace", "dev", self.host_if, "root", *ingress)
         dns_rules = []
+        dns_verified = True
         if condition.dns_failure:
             for proto in ("udp", "tcp"):
-                dns_rules.append(self._ip("netns", "exec", self.ns, "iptables", "-I", "OUTPUT", "-p", proto, "--dport", "53", "-j", "DROP", check=False).evidence(200))
+                rule = ["OUTPUT", "-p", proto, "--dport", "53", "-j", "DROP"]
+                inserted = self._ip("netns", "exec", self.ns, "iptables", "-I", *rule, check=False)
+                readback = self._ip("netns", "exec", self.ns, "iptables", "-C", *rule, check=False)
+                dns_verified = dns_verified and inserted.ok and readback.ok
+                dns_rules.append({"insert": inserted.evidence(200), "readback": readback.evidence(200)})
         shown_ns = self._ip("netns", "exec", self.ns, str(self.runner.path("tc")), "qdisc", "show", "dev", self.ns_if).stdout
         shown_host = self._tc("qdisc", "show", "dev", self.host_if).stdout
-        verified = "netem" in shown_ns and "netem" in shown_host
+        qdiscs_present = "netem" in shown_ns and "netem" in shown_host
         evidence = {"egress_netem": egress, "ingress_netem": ingress, "tc_show": {"ns": shown_ns[-400:], "host": shown_host[-400:]},
-                    "dns_rules": dns_rules, "seed": seed}
+                    "dns_rules": dns_rules, "seed": seed,
+                    "observed_meaning": "netem qdisc presence only; qdisc parameters are not parsed for exact read-back"}
         records = []
-        status = A.APPLIED_VERIFIED if verified else A.FAILED
+        # The qdisc output is retained as evidence, but only its presence is checked here;
+        # do not claim that requested values were verified without comparing the settings.
+        status = A.APPLIED_UNVERIFIED if qdiscs_present else A.FAILED
         for key, value, unit in (("network.bandwidth_kbps", {"down": condition.download_kbps, "up": condition.upload_kbps}, "kbps"),
                                  ("network.latency_ms", condition.latency_ms, "ms"), ("network.jitter_ms", condition.jitter_ms, "ms"),
                                  *((k, _requested(condition, k), "%" if k.endswith("_pct") else None) for k in sorted(GATEWAY_KEYS))):
             if value in (None, False, 0, {"down": None, "up": None}, {"enter_pct": None, "exit_pct": None}):
                 continue
-            records.append(ConditionRecord(parameter_key=key, requested_value=value, applied_value=value, unit=unit, application_status=status,
-                                           mechanism="tc netem on per-run namespace veth pair; read back with tc qdisc show",
-                                           evidence={**evidence, "observed_meaning": "qdisc configuration; measured effect reported by the network probe"},
+            item_status = (A.APPLIED_VERIFIED if dns_verified else A.FAILED) if key == "network.dns_failure" else status
+            records.append(ConditionRecord(parameter_key=key, requested_value=value, applied_value=value, unit=unit, application_status=item_status,
+                                           mechanism=("iptables DNS drop rules in the per-run namespace; verified with iptables -C"
+                                                      if key == "network.dns_failure" else
+                                                      "tc netem on per-run namespace veth pair; qdisc presence read back with tc qdisc show"),
+                                           evidence=evidence,
                                            verified_at=now()))
         return records
 
@@ -334,15 +345,15 @@ class NetworkTimeline(threading.Thread):
         self.manager, self.stages, self.on_event, self.cancelled = manager, stages, on_event, cancelled
         self.seed = seed if seed is not None else random.SystemRandom().randint(0, 2**31 - 1)
         self.results: list[dict] = []
-        self._stop = threading.Event()
+        self._stop_event = threading.Event()
         self.error: str | None = None
 
     def stop(self):
-        self._stop.set()
+        self._stop_event.set()
 
     def _sleep_until(self, t0: float, offset: float) -> bool:
         while time.monotonic() < t0 + offset:
-            if self._stop.is_set() or self.cancelled():
+            if self._stop_event.is_set() or self.cancelled():
                 return False
             time.sleep(min(0.25, max(0.0, t0 + offset - time.monotonic())))
         return True

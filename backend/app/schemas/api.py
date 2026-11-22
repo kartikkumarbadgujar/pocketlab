@@ -1,4 +1,5 @@
 from datetime import datetime
+import math
 from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
@@ -62,11 +63,23 @@ class ProfileInput(BaseModel):
     @field_validator("configuration")
     @classmethod
     def validate_configuration(cls, value):
+        numeric_keys = (
+            "network.packet_loss_pct",
+            "device.target_ram_gb",
+            "storage.free_target_mb",
+            "network.latency_ms",
+            "network.jitter_ms",
+        )
+        for key in numeric_keys:
+            item = value.get(key)
+            if item is not None and (isinstance(item, bool) or not isinstance(item, (int, float))
+                                     or (isinstance(item, float) and not math.isfinite(item))):
+                raise ValueError(f"{key} must be a finite number")
         loss = value.get("network.packet_loss_pct")
         if loss is not None and not 0 <= loss <= 100:
             raise ValueError("packet loss must be between 0 and 100")
         thermal = value.get("thermal.status")
-        if thermal is not None and thermal not in range(7):
+        if thermal is not None and (isinstance(thermal, bool) or not isinstance(thermal, int) or thermal not in range(7)):
             raise ValueError("thermal status must be an Android thermal status from 0 through 6")
         for key in ("device.target_ram_gb", "storage.free_target_mb", "network.latency_ms", "network.jitter_ms"):
             if key in value and value[key] < 0:
@@ -105,6 +118,8 @@ class MeasurementInput(BaseModel):
         values = [self.numeric_value is not None, self.text_value is not None, self.boolean_value is not None]
         if sum(values) > 1:
             raise ValueError("provide at most one typed measurement value")
+        if self.numeric_value is not None and not math.isfinite(self.numeric_value):
+            raise ValueError("numeric measurements must be finite")
         if self.validity_status == "valid" and not any(values):
             raise ValueError("valid measurements must contain a typed value")
         if self.parameter_key in {"network.packet_loss_pct", "network.packet_loss"} and self.numeric_value is not None and not 0 <= self.numeric_value <= 100:
