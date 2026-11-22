@@ -1,7 +1,8 @@
 """Operator-only approval of a quarantined APK build for execution.
 
-There is deliberately no HTTP endpoint for this: a user must not be able to approve their own upload.
-For the hackathon, approve only your own team's APKs or explicitly authorized sample applications.
+Project owners can also approve their own builds in the dashboard while ALLOW_OWNER_BUILD_APPROVAL is true (the
+default; each approval is confirmed and audit-logged). Set it to false to make this script the only way to approve.
+Approve only your own team's APKs or explicitly authorized sample applications.
 
     python -m scripts.approve_build 12 --reason "Team-owned demo app, built from commit abc123"
     python -m scripts.approve_build 12 --reject --reason "Not authorized"

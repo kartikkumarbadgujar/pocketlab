@@ -320,3 +320,9 @@ body,.app-shell,.app-main { background: #FAFAFA; color: #09090B; }
 .dock-link.active { color: #09090B; background: #F4F4F5; }
 button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible { outline-color: rgba(15,118,110,.32); }
 
+.build-approval { margin-top: 14px; padding: 14px 16px; display: grid; gap: 10px; border: 1px solid #e9d8a6; border-radius: 12px; background: #fffaf0; }
+.build-approval-head { display: flex; align-items: center; gap: 8px; color: var(--amber); }
+.build-approval-head strong { color: var(--ink); }
+.build-approval p { margin: 0; color: var(--muted); font-size: 13px; }
+.build-approval-target { font-size: 13px; color: var(--ink); overflow-wrap: anywhere; }
+.build-approval .button { justify-self: start; }

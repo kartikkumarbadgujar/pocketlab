@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     # Google Gemini API key for the in-app assistant (/api/v1/assistant). Unset = assistant disabled.
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-3.5-flash"
+    # Let project owners approve their own quarantined builds from the dashboard (with explicit confirmation and an
+    # audit-log entry). Set to false to require operator approval via scripts/approve_build.py only.
+    allow_owner_build_approval: bool = True
     max_apk_size_bytes: int = 104857600
     rate_limit: str = "120/minute"
     log_level: str = "INFO"

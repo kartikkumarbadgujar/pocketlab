@@ -1,5 +1,7 @@
+import hashlib
 import re
 import uuid
+from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -21,7 +23,44 @@ class UploadedBuildInput(BaseModel):
     version_name: str | None = Field(default=None, max_length=100)
     version_code: int | None = None
 
+
+class BuildApprovalInput(BaseModel):
+    reason: str = Field(min_length=3, max_length=300)
+    # The owner must explicitly confirm they own the app or are authorized to test it.
+    confirm_authorized: bool
+
 router = APIRouter(tags=["projects", "devices", "builds"])
+
+
+@router.post("/api/v1/projects/{project_id}/builds/{build_id}/approve")
+def approve_own_build(project_id: int, build_id: int, data: BuildApprovalInput, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    """Project-owner self-approval of a quarantined build (ALLOW_OWNER_BUILD_APPROVAL). The stored file is re-checked
+    against the upload's SHA-256 first; the worker verifies it again before installing."""
+    if not settings.allow_owner_build_approval:
+        raise HTTPException(403, "Builds on this server must be approved by an operator (scripts/approve_build.py)")
+    if not data.confirm_authorized:
+        raise HTTPException(422, "Confirm that you own this app or are authorized to test it")
+    owned_project(db, project_id, user.id)
+    build = db.scalar(select(AppBuild).where(AppBuild.id == build_id, AppBuild.project_id == project_id))
+    if not build:
+        raise HTTPException(404, "Build not found")
+    if build.scan_status == "approved":
+        return {"id": build.id, "scan_status": build.scan_status}
+    if build.scan_status == "rejected":
+        raise HTTPException(409, "A rejected build cannot be approved; upload it again")
+    if build.apk_storage_key.startswith(blob.BLOB_PREFIX):
+        digest, _ = validate_blob_apk(build.apk_storage_key[len(blob.BLOB_PREFIX):])
+    else:
+        path = (Path(settings.upload_dir).resolve() / build.apk_storage_key).resolve()
+        if not path.is_file():
+            raise HTTPException(409, "The APK file is no longer in storage; upload it again")
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    if digest != build.apk_sha256:
+        raise HTTPException(409, "Stored APK does not match the uploaded file's SHA-256; refusing to approve")
+    build.scan_status = "approved"
+    db.add(AuditLog(actor_user_id=user.id, action="build.approve", resource_type="app_build", resource_id=str(build.id), outcome=f"owner: {data.reason[:80]}"))
+    db.commit()
+    return {"id": build.id, "scan_status": build.scan_status}
 
 
 @router.get("/api/v1/projects")

@@ -102,6 +102,7 @@ export const assistantApi = {
 
 export const buildsApi = {
   list: async (projectId: number, options?: RequestOptions) => (await api.get<Build[]>(`/projects/${projectId}/builds`, options)).data,
+  approve: async (projectId: number, buildId: number, reason: string) => (await api.post<{ id: number; scan_status: string }>(`/projects/${projectId}/builds/${buildId}/approve`, { reason, confirm_authorized: true }, { timeout: 120_000 })).data,
   upload: async (projectId: number, file: File, packageName: string, versionName?: string, versionCode?: number, onProgress?: (value: number) => void, options?: RequestOptions) => {
     // Hosted (serverless) API: upload straight to private Blob storage, then register the file. A 404 from the token
     // endpoint means the server stores uploads itself, so fall through to the multipart upload below.
