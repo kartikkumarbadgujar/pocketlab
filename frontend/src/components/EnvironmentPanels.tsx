@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, CircleX, ServerCrash } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Info } from 'lucide-react'
 import type { CapabilitiesResponse, PreflightResult } from '../types'
 import { PLAN_OUTCOME_LABEL, PLAN_OUTCOME_TONE, formatValue, parameterLabel } from '../environment'
 import './Environment.css'
@@ -9,9 +9,8 @@ const CAP_TONE: Record<string, string> = { available: 'ok', supported: 'ok', una
 
 export function CapabilityPanel({ data, loading, error }: { data?: CapabilitiesResponse; loading: boolean; error?: string }) {
   if (loading) return <p className="field-help">Reading the worker's capability report…</p>
-  if (error) return <div className="env-note bad"><CircleX size={14} /><span>{error}</span></div>
-  if (!data || data.status !== 'available' || !data.workers.length) {
-    return <div className="env-note bad"><ServerCrash size={14} /><span>{data?.message ?? 'No Android execution worker is online. Real execution cannot start until one reports its capabilities.'}</span></div>
+  if (error || !data || data.status !== 'available' || !data.workers.length) {
+    return <details className="env-quiet"><summary><Info size={14} /> Waiting for an Android device to connect</summary><p>{error ?? data?.message ?? 'No Android execution worker is online yet.'}</p></details>
   }
   const worker = data.workers[0]
   return <div className="capability-list">
@@ -27,10 +26,10 @@ export function PreflightSummary({ result }: { result: PreflightResult }) {
   const limitations = result.items.filter((item) => PLAN_OUTCOME_TONE[item.outcome] === 'limit')
   return <div className="preflight-card">
     <div className="preflight-head">
-      <h2>{result.ok ? 'Preflight passed' : 'Preflight blocked'}</h2>
-      <span className={`tone-pill ${result.ok ? 'ok' : 'bad'}`}>{result.ok ? <CheckCircle2 size={12} /> : <CircleX size={12} />}{result.environment_type === 'emulator' ? 'Emulator test' : 'Physical Android test'}</span>
+      <h2>{result.ok ? 'Preflight passed' : 'Not ready to run yet'}</h2>
+      <span className={`tone-pill ${result.ok ? 'ok' : 'neutral'}`}>{result.ok ? <CheckCircle2 size={12} /> : <Info size={12} />}{result.environment_type === 'emulator' ? 'Emulator test' : 'Physical Android test'}</span>
     </div>
-    {result.blocking_errors.map((error) => <div className="env-note bad" key={error}><CircleX size={14} /><span>{error}</span></div>)}
+    {result.blocking_errors.length > 0 && <details className="env-quiet"><summary><Info size={14} /> Setup needed before this test can start (details)</summary><ul>{result.blocking_errors.map((error) => <li key={error}>{error}</li>)}</ul></details>}
     {result.warnings.map((warning) => <div className="env-note warn" key={warning}><AlertTriangle size={14} /><span>{warning}</span></div>)}
     {result.selected_system_image && <small className="field-help">System image: {result.selected_system_image.package}{result.selected_system_image.rootable ? '' : ' (not rootable)'}</small>}
     {limitations.length > 0 && <div className="limitations"><h3><AlertTriangle size={14} /> Will NOT be applied in this run</h3><ul>
