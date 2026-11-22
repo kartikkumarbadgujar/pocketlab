@@ -37,7 +37,7 @@ export default function GlowCursor() {
     let inView = true
     let active = 0
     let targetActive = 0
-    let pointer: [number, number] = [0.5, 0.5]
+    const pointer: [number, number] = [0.5, 0.5]
     let targetPointer: [number, number] = [0.5, 0.5]
     let clientPointer: [number, number] = [innerWidth / 2, innerHeight / 2]
     let resolutionLocation: WebGLUniformLocation | null = null
