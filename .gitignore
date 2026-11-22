@@ -30,6 +30,7 @@ Thumbs.db
 backend/worker_data/
 worker_data/
 real_emulator_artifacts/
+backend/real_emulator*_artifacts*/
 *.pftrace
 
 # Public, non-secret hosted build setting (API URL for the Vercel dashboard)

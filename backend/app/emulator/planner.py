@@ -60,9 +60,8 @@ def plan_environment(req: EnvironmentRequest, report: CapabilityReport | None) -
     required_tools = ["android_sdk", "adb"] + (["emulator", "virtualization"] if emulator else [])
     for tool in required_tools:
         if not _available(report, tool):
-            entry = report.tools.get(tool) or report.capabilities.get(tool)
-            reason = entry.reason if entry and entry.reason else "not detected on the worker"
-            result.blocking_errors.append(f"{tool.replace('_', ' ')} unavailable: {reason}")
+            # Raw capability diagnostics can include SDK paths, host names or vendor output.
+            result.blocking_errors.append(f"{tool.replace('_', ' ')} unavailable on the worker; check its SDK and emulator setup.")
 
     if emulator:
         if not _available(report, "avdmanager"):
@@ -80,16 +79,20 @@ def plan_environment(req: EnvironmentRequest, report: CapabilityReport | None) -
         if req.device.api_level >= 37 and req.device.data_partition_mb < 6144:
             result.blocking_errors.append(
                 f"This API 37 phone image provisions a 6 GB data filesystem; requesting {req.device.data_partition_mb} MB would fail read-back verification. Select 6 GB or more.")
+        if (image is not None and image.tag == "google_apis_playstore" and req.device.vm_heap_mb is not None
+                and req.device.vm_heap_mb < 576):
+            result.blocking_errors.append(
+                "This Google Play system image boots with a 576 MB minimum VM heap; select at least 576 MB or leave the heap at the image default.")
         ram_free = report.host.get("ram_available_mb")
         needed = req.device.ram_mb + EMULATOR_HOST_RAM_OVERHEAD_MB
         if ram_free is None:
             result.blocking_errors.append("Worker did not report available host RAM; cannot reserve resources safely.")
         elif ram_free < needed:
-            result.blocking_errors.append(f"Worker host has {ram_free} MB RAM available; {needed} MB is needed for a {req.device.ram_mb} MB guest.")
+            result.blocking_errors.append(f"Worker host does not have enough available RAM for a {req.device.ram_mb} MB guest and emulator overhead.")
         disk_free = report.host.get("disk_free_mb")
         disk_needed = req.device.data_partition_mb + req.device.sdcard_mb + EMULATOR_DISK_OVERHEAD_MB
         if disk_free is None or disk_free < disk_needed:
-            result.blocking_errors.append(f"Worker work directory needs {disk_needed} MB free disk; {disk_free} MB reported.")
+            result.blocking_errors.append("Worker work directory does not have enough free disk for the requested emulator configuration.")
         items += [
             PlanItem(parameter_key="device.api_level", requested_value=req.device.api_level, outcome="will_apply" if image else "unsupported",
                      mechanism=f"AVD system image {image.package}" if image else None),
@@ -193,7 +196,8 @@ def plan_environment(req: EnvironmentRequest, report: CapabilityReport | None) -
                               mechanism="svc wifi/data disable + emulator 'gsm data off'; verified via dumpsys connectivity"))
     if net.timeline:
         missing = sorted({k for stage in net.timeline for k in stage.condition.needs_gateway()}) if not gateway else []
-        items.append(PlanItem(parameter_key="network.timeline", requested_value=[s.model_dump() for s in net.timeline], outcome="will_apply",
+        items.append(PlanItem(parameter_key="network.timeline", requested_value=[s.model_dump() for s in net.timeline],
+                              outcome="requires_linux_gateway" if missing else "will_apply",
                               mechanism="timed replay during scenario execution; every transition verified and timestamped",
                               reason=(f"Stage parameters {', '.join(missing)} need the Linux gateway and will be recorded as not applied." if missing else None)))
         if missing:

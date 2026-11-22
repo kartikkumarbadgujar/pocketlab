@@ -14,8 +14,8 @@ export function CapabilityPanel({ data, loading, error }: { data?: CapabilitiesR
   }
   const worker = data.workers[0]
   return <div className="capability-list">
-    <small className="field-help">Worker <b>{worker.agent_name}</b> · {String(worker.host.os ?? '')} {String(worker.host.arch ?? '')} · {String(worker.host.ram_available_mb ?? '?')} MB RAM free · reported {new Date(worker.reported_at).toLocaleTimeString()}</small>
-    {KEY_CAPABILITIES.filter((key) => worker.summary[key]).map((key) => <div className="capability-row" key={key} title={worker.details[key]?.reason ?? undefined}>
+    <small className="field-help">Android worker online · reported {new Date(worker.reported_at).toLocaleTimeString()}</small>
+    {KEY_CAPABILITIES.filter((key) => worker.summary[key]).map((key) => <div className="capability-row" key={key}>
       <span>{key.replaceAll('_', ' ')}</span><span className={`tone-pill ${CAP_TONE[worker.summary[key]] ?? 'neutral'}`}>{worker.summary[key].replaceAll('_', ' ')}</span>
     </div>)}
     <small className="field-help">Installed images: {worker.system_images.length ? worker.system_images.map((i) => `API ${i.api_level} ${i.tag}`).join(', ') : 'none'}</small>

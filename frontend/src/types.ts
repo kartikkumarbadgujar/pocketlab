@@ -42,8 +42,7 @@ export type EnvironmentRequest = {
   strict_conditions: boolean
 }
 export type SystemImage = { package: string; api_level: number; tag: string; abi: string; rootable: boolean }
-export type CapabilityDetail = { status: string; reason: string | null; details: Record<string, unknown> }
-export type CapabilityWorker = { agent_name: string; last_seen_at: string | null; reported_at: string; summary: Record<string, string>; host: Record<string, string | number | null>; system_images: SystemImage[]; physical_devices: { device_id: number; state: string }[]; details: Record<string, CapabilityDetail> }
+export type CapabilityWorker = { reported_at: string; summary: Record<string, string>; system_images: SystemImage[] }
 export type CapabilitiesResponse = { status: 'available' | 'no_worker_online'; workers: CapabilityWorker[]; message?: string }
 export type PlanItem = { parameter_key: string; requested_value: unknown; unit: string | null; outcome: PlanOutcome; mechanism: string | null; reason: string | null }
 export type PreflightResult = { ok: boolean; environment_type: EnvironmentType; blocking_errors: string[]; warnings: string[]; items: PlanItem[]; selected_system_image: SystemImage | null; capability_summary: Record<string, string>; capability_report_at: string | null }

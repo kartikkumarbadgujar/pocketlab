@@ -8,6 +8,7 @@ afterwards. Battery saver is a genuine OS power mode in both cases and is verifi
 from __future__ import annotations
 
 import re
+import time
 from datetime import datetime, timezone
 
 from app.emulator.adb_manager import AdbManager
@@ -46,6 +47,7 @@ class BatteryManager:
         self.emulator = emulator
         self.overridden = False
         self.saver_changed = False
+        self.saver_original: bool | None = None
 
     def read(self) -> tuple[dict, str]:
         text = self.adb.shell("dumpsys", "battery", timeout=20).stdout
@@ -114,30 +116,47 @@ class BatteryManager:
             rec("battery.present", spec.present, state.get("present"), state.get("present") == spec.present)
         return records
 
+    def _read_saver(self) -> tuple[bool | None, str, str]:
+        dump_result = self.adb.shell("dumpsys", "power", timeout=30)
+        setting_result = self.adb.shell("settings", "get", "global", "low_power", timeout=15)
+        observed = parse_saver(dump_result.stdout, setting_result.stdout)
+        return observed, dump_result.stdout, setting_result.stdout
+
     def set_saver(self, enabled: bool) -> ConditionRecord:
         mode = "1" if enabled else "0"
+        if self.saver_original is None:
+            original, _, _ = self._read_saver()
+            self.saver_original = original
         attempt = self.adb.shell("cmd", "power", "set-mode", mode, timeout=20)
+        commands = [{"command": "cmd power set-mode", "result": attempt.evidence(300)}]
         used = "cmd power set-mode"
-        if not attempt.ok or "Unknown command" in attempt.stdout + attempt.stderr:
-            self.adb.shell("settings", "put", "global", "low_power", mode, timeout=20)
-            used = "settings put global low_power"
+        observed, dump, setting = self._read_saver()
+        if observed != enabled:
+            fallback = self.adb.shell("settings", "put", "global", "low_power", mode, timeout=20)
+            commands.append({"command": "settings put global low_power", "result": fallback.evidence(300)})
+            used = "cmd power set-mode with settings fallback"
+            # Settings can update PowerManager asynchronously. Confirm the guest state, not the
+            # command's exit code, before recording the condition as applied.
+            for attempt_index in range(8):
+                observed, dump, setting = self._read_saver()
+                if observed == enabled:
+                    break
+                if attempt_index < 7:
+                    time.sleep(0.25)
         self.saver_changed = True
-        dump = self.adb.shell("dumpsys", "power", timeout=30).stdout
-        setting = self.adb.shell("settings", "get", "global", "low_power", timeout=15).stdout
-        observed = parse_saver(dump, setting)
         return ConditionRecord(parameter_key="battery.saver_enabled", requested_value=enabled, applied_value=enabled, observed_value=observed,
                                application_status=A.APPLIED_VERIFIED if observed == enabled else A.FAILED,
                                mechanism=f"{used}; read back from dumpsys power",
-                               evidence={"set_mode_result": attempt.evidence(500), "low_power_setting": setting.strip(),
+                               evidence={"commands": commands, "low_power_setting": setting.strip(),
                                          "note": "Battery saver is a real OS power-saving mode in the guest."},
                                verified_at=datetime.now(timezone.utc))
 
     def revert(self) -> list[ConditionRecord]:
         records = []
         if self.saver_changed:
-            rec = self.set_saver(False)
+            rec = self.set_saver(self.saver_original if self.saver_original is not None else False)
             rec.parameter_key = "battery.saver_reset"
-            rec.application_status = A.REVERTED if rec.observed_value is False else A.FAILED
+            rec.application_status = A.REVERTED if rec.observed_value == rec.requested_value else A.FAILED
             records.append(rec)
         if self.overridden and not self.emulator:
             result = self.adb.shell("dumpsys", "battery", "reset", timeout=20)

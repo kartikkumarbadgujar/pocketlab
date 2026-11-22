@@ -78,6 +78,18 @@ def test_capabilities_report_no_worker_until_one_reports(client, auth_headers):
     assert client.get("/api/v1/environment/capabilities").status_code == 401
 
 
+def test_capability_endpoint_hides_host_worker_and_physical_device_details(client, auth_headers):
+    headers, _ = auth_headers
+    report = capability_report()
+    report["physical_devices"] = [{"device_id": 902, "state": "device"}]
+    report["tools"]["android_sdk"] = {"status": "unavailable", "reason": "SDK configured at C:\\private\\worker\\sdk"}
+    client.post("/api/v1/runner/heartbeat", json={**IDENTITY, "capability_report": report}, headers=RUNNER)
+    worker = client.get("/api/v1/environment/capabilities", headers=headers).json()["workers"][0]
+    assert worker["summary"]["android_sdk"] == "unavailable"
+    assert "system_images" in worker and "host" not in worker and "agent_name" not in worker
+    assert "physical_devices" not in worker and "details" not in worker
+
+
 def test_preflight_blocks_without_worker_and_plans_honestly(client, auth_headers):
     headers, _ = auth_headers
     blocked = client.post("/api/v1/environment/preflight", json={"configuration": entry_level()}, headers=headers).json()
@@ -95,6 +107,11 @@ def test_preflight_blocks_without_worker_and_plans_honestly(client, auth_headers
     assert any("physical Android device" in w for w in plan["warnings"])
     assert plan["selected_system_image"]["package"] == "system-images;android-30;google_apis;x86_64"
 
+    timeline = {"start_s": 0, "end_s": 10, "label": "lossy", "condition": {"packet_loss_pct": 3}}
+    timeline_plan = client.post("/api/v1/environment/preflight",
+                                json={"configuration": entry_level(network={"timeline": [timeline]})}, headers=headers).json()
+    assert next(i for i in timeline_plan["items"] if i["parameter_key"] == "network.timeline")["outcome"] == "requires_linux_gateway"
+
 
 def test_preflight_blocks_unsafe_or_impossible_requests(client, auth_headers):
     headers, _ = auth_headers
@@ -103,6 +120,7 @@ def test_preflight_blocks_unsafe_or_impossible_requests(client, auth_headers):
                        headers=headers).json()
     errors = " ".join(plan["blocking_errors"])
     assert plan["ok"] is False and "safety reserve" in errors and "No installed system image for API 33" in errors and "RAM" in errors
+    assert "2500" not in errors
 
 
 def test_preflight_with_netem_gateway_applies_packet_loss(client, auth_headers):

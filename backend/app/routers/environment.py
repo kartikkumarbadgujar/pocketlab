@@ -44,10 +44,10 @@ def capabilities(db: Session = Depends(get_db), user: User = Depends(current_use
                 "message": "No Android execution worker has reported in the last 3 minutes. Start it with "
                            "'python -m app.workers.emulator_runner' on a machine with the Android SDK and hardware acceleration."}
     return {"status": "available", "workers": [
-        {"agent_name": agent.agent_name, "last_seen_at": agent.last_seen_at, "reported_at": report.generated_at, "summary": report.summary(),
-         "host": {k: report.host.get(k) for k in ("os", "arch", "cpu_count", "ram_total_mb", "ram_available_mb", "disk_free_mb", "storage_reserve_mb")},
-         "system_images": [i.model_dump() for i in report.system_images], "physical_devices": report.physical_devices,
-         "details": {k: v.model_dump() for k, v in {**report.tools, **report.capabilities}.items()}}
+        # The configurator needs image API levels and coarse capability statuses only. Keep
+        # host resources, worker identity, physical-device presence and raw tool diagnostics private.
+        {"reported_at": report.generated_at, "summary": report.summary(),
+         "system_images": [i.model_dump() for i in report.system_images]}
         for agent, report in reports]}
 
 

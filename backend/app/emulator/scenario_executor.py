@@ -343,9 +343,12 @@ class ScenarioExecutor:
         records = self.ctx.network.apply_condition(NetworkCondition.model_validate(c.get("condition", {})))
         for record in records:
             self.ctx.record_condition(record)
-        applied = [x for x in records if x.application_status not in (A.REQUIRES_LINUX_GATEWAY, A.UNSUPPORTED)]
-        return {"verified": all(x.application_status in (A.APPLIED_VERIFIED, A.EMULATED) for x in applied),
-                "not_applied": [x.parameter_key for x in records if x.application_status in (A.REQUIRES_LINUX_GATEWAY, A.UNSUPPORTED)]}
+        not_applied = sorted({x.parameter_key for x in records if x.application_status in (A.REQUIRES_LINUX_GATEWAY, A.UNSUPPORTED)})
+        if not_applied:
+            raise StepBlocked("network conditions require unavailable capabilities: " + ", ".join(not_applied))
+        if any(x.application_status is A.FAILED for x in records):
+            raise EmulatorError("Network condition read-back failed")
+        return {"verified": all(x.application_status in (A.APPLIED_VERIFIED, A.EMULATED) for x in records)}
 
     def a_network_restore(self, c, r):
         if self.ctx.network is None:
@@ -370,7 +373,22 @@ class ScenarioExecutor:
         if timeline is None:
             return {"skipped": "no timeline running"}
         done = timeline.await_completion(float(c.get("timeout_s", 1800)))
-        return {"timeline_completed": done, "verified": all(s["verified"] for s in timeline.results), "stages": timeline.results}
+        if not done:
+            raise StepBlocked("network timeline did not finish before its timeout")
+        if timeline.error:
+            raise EmulatorError("Network timeline could not be applied")
+        if len(timeline.results) != len(timeline.stages):
+            raise StepBlocked("network timeline ended before all requested stages ran")
+        not_applied = sorted({
+            application.get("parameter_key", "network condition")
+            for stage in timeline.results for application in stage.get("applications", [])
+            if application.get("application_status") in (A.REQUIRES_LINUX_GATEWAY.value, A.UNSUPPORTED.value)
+        })
+        if not_applied:
+            raise StepBlocked("network timeline could not apply all requested conditions: " + ", ".join(not_applied))
+        if not all(s["verified"] for s in timeline.results):
+            raise EmulatorError("Network timeline condition read-back failed")
+        return {"timeline_completed": True, "verified": True, "stages": timeline.results}
 
     def a_network_switch(self, c, r):
         to = c.get("to", "mobile")

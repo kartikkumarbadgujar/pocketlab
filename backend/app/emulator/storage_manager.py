@@ -137,13 +137,15 @@ class StorageManager:
         result = self.adb.shell("rm", "-rf", FILL_DIR, timeout=120)
         after = self.snapshot()
         restored = after.available_bytes >= self.baseline.available_bytes - self.restore_tolerance
-        leftover = self.adb.shell("ls", FILL_DIR, timeout=10)
+        directory_removed = self.adb.shell_pipeline(f"test ! -e {device_quote(FILL_DIR)}", timeout=10).ok
         record = ConditionRecord(parameter_key="storage.allocation_cleanup", requested_value="remove all PocketLab allocation files",
                                  observed_value=round(after.available_bytes / MB, 1), unit="MB",
-                                 application_status=A.REVERTED if restored and not leftover.ok else A.FAILED,
-                                 mechanism=f"rm -rf {FILL_DIR}; verified with {after.method}",
+                                 application_status=A.REVERTED if result.ok and directory_removed else A.FAILED,
+                                 mechanism=f"remove {FILL_DIR}; verify directory absence and read {after.method}",
                                  evidence={"baseline_available_mb": round(self.baseline.available_bytes / MB, 1), "after": after.as_dict(),
-                                           "rm": result.evidence(), "directory_removed": not leftover.ok},
+                                           "free_space_restored_within_tolerance": restored,
+                                           "free_space_delta_mb": round((after.available_bytes - self.baseline.available_bytes) / MB, 1),
+                                           "remove_result": {"ok": result.ok}, "directory_removed": directory_removed},
                                  verified_at=datetime.now(timezone.utc))
         self.allocated_files.clear()
         return record

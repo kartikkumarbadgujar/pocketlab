@@ -23,8 +23,11 @@ export default function EnvironmentConfigurator({ value, onChange, capabilities 
   const apiLevels = [...new Set((worker?.system_images ?? []).map((image) => image.api_level))].sort((a, b) => a - b)
   const apiLevelKey = apiLevels.join(',')
   const levelChoices = apiLevels.length ? apiLevels : [value.device.api_level]
+  const currentApiImages = worker?.system_images.filter((image) => image.api_level === value.device.api_level) ?? []
+  const playStoreOnlyImage = currentApiImages.length > 0 && currentApiImages.every((image) => image.tag === 'google_apis_playstore')
   const minimumRamMb = value.device.api_level >= 37 ? 4096 : 1024
   const minimumDataPartitionMb = value.device.api_level >= 37 ? 6144 : 1024
+  const minimumVmHeapMb = value.device.api_level >= 37 && playStoreOnlyImage ? 576 : 64
   const ramChoices = [1024, 1536, 2048, 3072, 4096, 6144, 8192].filter((mb) => mb >= minimumRamMb)
   const dataPartitionChoices = [2048, 4096, 6144, 8192, 16384].filter((mb) => mb >= minimumDataPartitionMb)
   useEffect(() => {
@@ -75,7 +78,8 @@ export default function EnvironmentConfigurator({ value, onChange, capabilities 
           </select>
         </label>
         <label className="env-field"><span>VM heap (optional)</span>
-          <input type="number" min={64} max={1024} placeholder="image default" value={value.device.vm_heap_mb ?? ''} onChange={(e) => set('device', { vm_heap_mb: optionalNumber(e.target.value) })} />
+          <input type="number" min={minimumVmHeapMb} max={1024} placeholder="image default" value={value.device.vm_heap_mb ?? ''} onChange={(e) => set('device', { vm_heap_mb: optionalNumber(e.target.value) })} />
+          {value.device.api_level >= 37 && playStoreOnlyImage && <small>This Google Play system image boots with a 576 MB minimum heap. Leave blank to use its default.</small>}
         </label>
       </div>
     </> : <div className="env-note"><Info size={14} /><span>Physical device hardware (RAM, CPU, Android version) cannot be changed. The worker records the actual values and marks the requested hardware as unsupported.</span></div>}

@@ -197,6 +197,26 @@ class EmulatorManager:
             if status not in (S.CLEANING, S.CLEANED, S.FAILED):
                 raise CancelledError("Cancellation requested")
 
+    @staticmethod
+    def _public_error(exc: EmulatorError) -> str:
+        messages = {
+            "preflight_failed": "Android execution prerequisites are unavailable on the worker. Check its SDK and emulator setup.",
+            "android_sdk_not_found": "Android execution prerequisites are unavailable on the worker. Check its SDK and emulator setup.",
+            "command_not_allowed": "The worker rejected an unsafe Android command.",
+            "command_failed": "Android tooling failed while preparing or controlling the test device.",
+            "command_timeout": "Android tooling timed out while preparing or controlling the test device.",
+            "host_resources_unavailable": "Worker resources are unavailable for this emulator configuration.",
+            "emulator_boot_timeout": "Android did not finish starting before the worker timeout.",
+            "device_not_ready": "The Android device is unavailable or not authorized for testing.",
+            "condition_application_failed": "The requested test condition could not be applied and verified.",
+            "unsafe_condition": "The requested test condition exceeds the environment safety limits.",
+            "apk_validation_failed": "The APK could not be validated for installation.",
+            "apk_install_failed": "Android could not install the APK.",
+            "invalid_scenario_definition": "A selected test scenario could not be executed.",
+            "canceled": "The run was canceled.",
+        }
+        return messages.get(exc.code, "The Android test run failed; the worker is cleaning up.")
+
     def _check_cancel(self, run: _Run) -> None:
         if run.cancel.is_set():
             raise CancelledError("Cancellation requested")
@@ -225,7 +245,7 @@ class EmulatorManager:
         run = _Run(job=job, reporter=reporter, run_dir=run_dir)
         heartbeat = Heartbeat(reporter.heartbeat, self.settings.heartbeat_interval_s, run.cancel.set)
         heartbeat.start()
-        outcome, error = "failed", None
+        outcome, error, public_error = "failed", None, None
         locked = False
         try:
             self._transition(run, S.PREFLIGHT, "Re-checking host capabilities on the worker")
@@ -238,8 +258,10 @@ class EmulatorManager:
                 raise PreflightError("; ".join(plan.blocking_errors) or "Android SDK unavailable")
             self.lock.acquire()
             locked = True
+            if job.environment_type == "emulator":
+                check_host_capacity(self.settings, job.request)
             reporter.event("resources_reserved", "Host lock acquired and capacity verified",
-                           data=check_host_capacity(self.settings, job.request) if job.environment_type == "emulator" else {})
+                           data={"reserved": True})
             if job.environment_type == "emulator":
                 self._provision_and_boot(run, runner, sdk, plan)
             else:
@@ -258,13 +280,17 @@ class EmulatorManager:
             self._safe_status(run, S.CANCEL_REQUESTED, "Cancellation acknowledged by worker")
         except EmulatorError as exc:
             error = exc
-            _quiet(reporter.event, "failure", f"{exc.code}: {exc.message}", "error", {"code": exc.code, "details": _safe(exc.details)})
-            self._safe_status(run, S.FAILED, f"{exc.code}: {exc.message}")
+            public_error = self._public_error(exc)
+            logger.warning("worker_execution_error", extra={"run_id": job.run_id, "error_code": exc.code})
+            _quiet(reporter.event, "failure", public_error, "error", {"code": exc.code})
+            self._safe_status(run, S.FAILED, public_error)
         except Exception as exc:   # never leave an emulator running because of an unexpected bug
             error = exc
-            logger.exception("worker_unexpected_error")
-            _quiet(reporter.event, "failure", f"Unexpected worker error: {exc}", "error")
-            self._safe_status(run, S.FAILED, f"Unexpected worker error: {exc}")
+            reference = uuid.uuid4().hex[:12]
+            logger.exception("worker_unexpected_error", extra={"run_id": job.run_id, "error_reference": reference})
+            public_error = f"Unexpected worker error. Reference {reference}; the worker is cleaning up."
+            _quiet(reporter.event, "failure", public_error, "error", {"code": "internal_worker_error", "reference": reference})
+            self._safe_status(run, S.FAILED, public_error)
         finally:
             try:
                 self._cleanup(run)
@@ -275,7 +301,7 @@ class EmulatorManager:
         self.last_error = error
         if outcome == "failed" and error is not None:
             try:
-                reporter.event("outcome", f"Run failed: {getattr(error, 'message', str(error))}", "error")
+                reporter.event("outcome", f"Run failed: {public_error or 'worker error'}", "error")
             except Exception:
                 pass
         return outcome
@@ -428,9 +454,15 @@ class EmulatorManager:
                                                   application_status=A.CONFIGURED, evidence={"reason": "No selected scenario replays the network timeline "
                                                                                                        "(select 'Product image loading under unstable connectivity')."}))
             else:
-                ok = bool(timeline.results) and all(s["verified"] for s in timeline.results) and len(timeline.results) == len(job.request.network.timeline)
+                complete = bool(timeline.results) and len(timeline.results) == len(job.request.network.timeline)
+                requires_gateway = any(
+                    application.get("application_status") == A.REQUIRES_LINUX_GATEWAY.value
+                    for stage in timeline.results for application in stage.get("applications", []))
+                verified = complete and not timeline.error and all(s["verified"] for s in timeline.results)
+                status = (A.APPLIED_VERIFIED if verified else A.REQUIRES_LINUX_GATEWAY if requires_gateway
+                          else A.FAILED if timeline.error else A.APPLIED_UNVERIFIED)
                 self._record(run)(ConditionRecord(parameter_key="network.timeline", requested_value=len(job.request.network.timeline),
-                                                  applied_value=len(timeline.results), application_status=A.APPLIED_VERIFIED if ok else A.FAILED,
+                                                  applied_value=len(timeline.results), application_status=status,
                                                   mechanism="timed replay with per-transition verification",
                                                   evidence={"seed": timeline.seed, "stages": timeline.results, "error": timeline.error}))
         return results

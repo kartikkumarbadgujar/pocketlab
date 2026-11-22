@@ -13,7 +13,7 @@ from app.emulator import planner
 from app.emulator.adb_manager import AdbManager
 from app.emulator.apk_manifest import manifest_from_apk, parse_aapt2_badging
 from app.emulator.avd_manager import AvdManager
-from app.emulator.battery_manager import parse_dumpsys_battery, parse_saver
+from app.emulator.battery_manager import BatteryManager, parse_dumpsys_battery, parse_saver
 from app.emulator.capability_detector import build_runner
 from app.emulator.console_manager import validate_console_command
 from app.emulator.emulator_config import AndroidSdk, WorkerSettings, avd_name_for_run, build_avd_spec, emulator_netdelay, emulator_netspeed
@@ -21,13 +21,13 @@ from app.emulator.emulator_monitor import detect_failures
 from app.emulator.exceptions import CommandNotAllowedError, EmulatorError, SdkNotFoundError, UnsafeConditionError
 from app.emulator.measurement_collector import parse_am_start, parse_displayed, parse_gfxinfo, parse_proc_stat_pair
 from app.emulator.memory_manager import parse_app_meminfo, parse_meminfo
-from app.emulator.network_manager import NetemGateway, parse_ping
+from app.emulator.network_manager import NetemGateway, NetworkTimeline, parse_ping
 from app.emulator.process import CommandResult, ProcessRunner, device_quote
 from app.emulator.schemas import (
     ALLOWED_TRANSITIONS, ApplicationStatus, CapabilityReport, EnvironmentRequest, EnvironmentStatus as S, MeasurementRecord, MeasurementStatus,
-    NetworkCondition, SystemImageInfo, request_from_profile, transition_allowed,
+    NetworkCondition, SystemImageInfo, TimelineStage, ConditionRecord, request_from_profile, transition_allowed,
 )
-from app.emulator.storage_manager import StorageManager, parse_df, parse_statfs
+from app.emulator.storage_manager import StorageManager, StorageSnapshot, parse_df, parse_statfs
 from app.emulator.thermal_manager import ThermalManager, parse_thermalservice
 from tests.apk_factory import build_axml
 
@@ -171,6 +171,77 @@ def test_planner_supports_api_37_without_optional_avdmanager():
     assert not too_small.ok and any("requires at least 4096 MB guest RAM" in error for error in too_small.blocking_errors)
     too_small_data = planner.plan_environment(EnvironmentRequest.model_validate({"device": {"api_level": 37, "ram_mb": 4096, "data_partition_mb": 4096}}), report)
     assert not too_small_data.ok and any("provisions a 6 GB data filesystem" in error for error in too_small_data.blocking_errors)
+    too_small_heap = planner.plan_environment(EnvironmentRequest.model_validate({"device": {"api_level": 37, "ram_mb": 4096,
+                                                                                          "data_partition_mb": 6144, "vm_heap_mb": 256}}), report)
+    assert not too_small_heap.ok and any("576 MB minimum VM heap" in error for error in too_small_heap.blocking_errors)
+
+
+def test_battery_saver_checks_readback_falls_back_and_restores_original():
+    state = {"enabled": False}
+
+    def handler(args):
+        command = " ".join(args)
+        if command.startswith("shell cmd power set-mode"):
+            return ""  # Some emulator versions return success without updating PowerManager.
+        if command == "shell dumpsys power":
+            return f"mLowPowerModeEnabled={'true' if state['enabled'] else 'false'}"
+        if command == "shell settings get global low_power":
+            return "1" if state["enabled"] else "0"
+        if command.startswith("shell settings put global low_power "):
+            state["enabled"] = command.endswith(" 1")
+            return ""
+        return ""
+
+    adb = FakeAdb(handler)
+    manager = BatteryManager(adb, None, emulator=True)
+    applied = manager.set_saver(True)
+    assert applied.application_status is ApplicationStatus.APPLIED_VERIFIED and state["enabled"] is True
+    assert len(applied.evidence["commands"]) == 2
+    reset = manager.revert()
+    assert reset[0].application_status is ApplicationStatus.REVERTED and state["enabled"] is False
+
+
+def test_storage_cleanup_verifies_our_files_separately_from_guest_space_drift():
+    baseline = 5000 * 1024 * 1024
+    after = baseline - 240 * 1024 * 1024
+
+    def handler(args):
+        command = " ".join(args)
+        if command == "shell rm -rf /data/local/tmp/pocketlab_fill":
+            return ""
+        if command.startswith("shell stat -f -c"):
+            return f"4096 1500000 {after // 4096}"
+        if command == "shell test ! -e /data/local/tmp/pocketlab_fill":
+            return ""
+        return ""
+
+    manager = StorageManager(FakeAdb(handler), reserve_mb=200)
+    manager.baseline = StorageSnapshot(total_bytes=6 * 1024**3, available_bytes=baseline, method="statfs(/data)", raw="")
+    record = manager.release()
+    assert record.application_status is ApplicationStatus.REVERTED
+    assert record.evidence["directory_removed"] is True
+    assert record.evidence["free_space_restored_within_tolerance"] is False
+    assert record.evidence["free_space_delta_mb"] == -240
+
+
+def test_timeline_is_not_verified_when_a_requested_effect_is_unavailable():
+    class PartialNetwork:
+        @staticmethod
+        def apply_condition(_condition):
+            return [ConditionRecord(parameter_key="network.online", requested_value=True,
+                                    application_status=ApplicationStatus.APPLIED_VERIFIED),
+                    ConditionRecord(parameter_key="network.packet_loss_pct", requested_value=3,
+                                    application_status=ApplicationStatus.REQUIRES_LINUX_GATEWAY)]
+
+        @staticmethod
+        def apply_base():
+            return []
+
+    timeline = NetworkTimeline(PartialNetwork(), [TimelineStage(start_s=0, end_s=0.02, label="partial", condition=NetworkCondition())],
+                               lambda *_: None, lambda: False, seed=7)
+    timeline.start()
+    assert timeline.await_completion(2)
+    assert timeline.results[0]["verified"] is False
 
 
 def test_measurement_records_refuse_fabrication():
@@ -431,10 +502,11 @@ def test_low_storage_scenario_requires_condition(tmp_path, monkeypatch):
 # lifecycle
 class RecordingReporter:
     def __init__(self, cancel_at=None):
-        self.statuses, self.events, self.cancel_at = [], [], cancel_at
+        self.statuses, self.status_messages, self.events, self.cancel_at = [], [], [], cancel_at
 
     def set_status(self, status, message, **fields):
         self.statuses.append(status)
+        self.status_messages.append(message)
         return {"cancel_requested": self.cancel_at is not None and status == self.cancel_at}
 
     def event(self, event_type, message, severity="info", data=None):
@@ -462,7 +534,7 @@ def test_lifecycle_without_sdk_fails_in_preflight_and_still_cleans(tmp_path, mon
     reporter = RecordingReporter()
     assert manager.execute(_job(), reporter) == "failed"
     assert reporter.statuses == [S.PREFLIGHT, S.FAILED, S.CLEANING, S.CLEANED]
-    assert any(t == "failure" and "preflight_failed" in m and "android sdk" in m.lower() for t, _, m in reporter.events)
+    assert any(t == "failure" and "android execution prerequisites" in m.lower() for t, _, m in reporter.events)
     assert not (tmp_path / "runs" / "run_7_a1").exists()
 
 
@@ -473,6 +545,43 @@ def test_lifecycle_cancellation_goes_through_cleanup(tmp_path, monkeypatch):
     reporter = RecordingReporter(cancel_at=S.PREFLIGHT)
     assert manager.execute(_job(), reporter) == "canceled"
     assert reporter.statuses[-3:] == [S.CANCEL_REQUESTED, S.CLEANING, S.CLEANED]
+
+
+def test_unexpected_worker_error_does_not_send_exception_details_to_reporter(tmp_path):
+    from app.emulator.emulator_config import WorkerSettings
+    from app.emulator.emulator_manager import EmulatorManager
+
+    class BrokenDetector:
+        @staticmethod
+        def detect():
+            raise RuntimeError("secret DATABASE_URL=C:\\private\\db-key")
+
+    manager = EmulatorManager(WorkerSettings(work_dir=tmp_path, heartbeat_interval_s=3600))
+    manager.detector = BrokenDetector()
+    reporter = RecordingReporter()
+    assert manager.execute(_job(), reporter) == "failed"
+    public_text = " ".join(reporter.status_messages + [event[2] for event in reporter.events])
+    assert "secret DATABASE_URL" not in public_text and "private" not in public_text
+    assert "Reference " in public_text and "CLEANED" in [s.value for s in reporter.statuses]
+
+
+def test_known_worker_error_does_not_send_host_details_to_reporter(tmp_path):
+    from app.emulator.emulator_config import WorkerSettings
+    from app.emulator.emulator_manager import EmulatorManager
+    from app.emulator.exceptions import ResourceUnavailableError
+
+    class BrokenDetector:
+        @staticmethod
+        def detect():
+            raise ResourceUnavailableError("Host has 128 MB RAM available; C:\\private\\machine")
+
+    manager = EmulatorManager(WorkerSettings(work_dir=tmp_path, heartbeat_interval_s=3600))
+    manager.detector = BrokenDetector()
+    reporter = RecordingReporter()
+    assert manager.execute(_job(), reporter) == "failed"
+    public_text = " ".join(reporter.status_messages + [event[2] for event in reporter.events])
+    assert "128 MB" not in public_text and "private" not in public_text
+    assert "resources are unavailable" in public_text.lower()
 
 
 def test_host_lock_prevents_concurrent_emulator_jobs(tmp_path):

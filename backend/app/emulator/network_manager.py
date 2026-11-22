@@ -367,8 +367,7 @@ class NetworkTimeline(threading.Thread):
                     break
                 started = now()
                 records = self.manager.apply_condition(stage.condition)
-                verified = all(r.application_status in (A.APPLIED_VERIFIED, A.EMULATED) for r in records
-                               if r.application_status not in (A.REQUIRES_LINUX_GATEWAY, A.UNSUPPORTED))
+                verified = all(r.application_status in (A.APPLIED_VERIFIED, A.EMULATED) for r in records)
                 entry = {"label": stage.label, "planned_start_s": stage.start_s, "planned_end_s": stage.end_s, "actual_start": started.isoformat(),
                          "actual_start_offset_s": round(time.monotonic() - t0, 2), "condition": stage.condition.model_dump(),
                          "verified": verified, "applications": [r.model_dump(mode="json") for r in records]}
