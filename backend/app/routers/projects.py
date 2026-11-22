@@ -1,12 +1,25 @@
+import re
+import uuid
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from app.config import settings
 from app.database import get_db
 from app.dependencies import current_user
 from app.models import AppBuild, AuditLog, Device, Project, User
 from app.schemas.api import DeviceInput, ProjectInput
-from app.services.apk import validate_and_store_apk
+from app.services import blob
+from app.services.apk import validate_and_store_apk, validate_blob_apk
 from app.services.ownership import owned_project
+
+
+class UploadedBuildInput(BaseModel):
+    url: str = Field(max_length=1024)
+    pathname: str = Field(max_length=255)
+    package_name: str = Field(min_length=1, max_length=255)
+    version_name: str | None = Field(default=None, max_length=100)
+    version_code: int | None = None
 
 router = APIRouter(tags=["projects", "devices", "builds"])
 
@@ -68,9 +81,48 @@ async def upload_build(project_id: int, version_name: str | None = Form(None), v
     if project.application_package and project.application_package != package_name:
         raise HTTPException(422, "Build package does not match the project application package")
     key, digest, size = await validate_and_store_apk(file)
+    return _save_build(db, user, project_id, version_name, version_code, package_name, digest, key, size)
+
+
+def _save_build(db: Session, user: User, project_id: int, version_name: str | None, version_code: int | None, package_name: str, digest: str, key: str, size: int) -> dict:
     build = AppBuild(project_id=project_id, version_name=version_name, version_code=version_code, package_name=package_name, apk_sha256=digest, apk_storage_key=key, scan_status="quarantined")
     db.add(build); db.flush();db.add(AuditLog(actor_user_id=user.id,action="build.upload",resource_type="app_build",resource_id=str(build.id),outcome="quarantined"));db.commit(); db.refresh(build)
     return {"id": build.id, "project_id": project_id, "version_name": version_name, "version_code": version_code, "package_name": package_name, "apk_sha256": digest, "size_bytes": size, "scan_status": build.scan_status}
+
+
+# Direct upload (serverless hosting): the browser uploads to private Blob storage with a short-lived token, then
+# registers the stored file here. Returns 404 when Blob storage is not configured, and clients fall back to multipart.
+_BLOB_PATH = re.compile(r"^quarantine/p(\d+)/[0-9a-f]{32}\.apk$")
+
+
+@router.post("/api/v1/projects/{project_id}/builds/upload-token")
+def build_upload_token(project_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    owned_project(db, project_id, user.id)
+    if not blob.enabled():
+        raise HTTPException(404, "Direct APK upload is not configured on this server")
+    pathname = f"quarantine/p{project_id}/{uuid.uuid4().hex}.apk"
+    return {"pathname": pathname, "client_token": blob.client_upload_token(pathname, settings.max_apk_size_bytes), "maximum_size_bytes": settings.max_apk_size_bytes}
+
+
+@router.post("/api/v1/projects/{project_id}/builds/from-upload", status_code=201)
+def register_uploaded_build(project_id: int, data: UploadedBuildInput, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    project = owned_project(db, project_id, user.id)
+    match = _BLOB_PATH.match(data.pathname)
+    if not match or int(match.group(1)) != project_id:
+        raise HTTPException(400, "Upload path does not belong to this project")
+    blob.check_url(data.url, data.pathname)
+    if project.application_package and project.application_package != data.package_name:
+        raise HTTPException(422, "Build package does not match the project application package")
+    key = blob.BLOB_PREFIX + data.url
+    if db.scalar(select(AppBuild.id).where(AppBuild.apk_storage_key == key)):
+        raise HTTPException(409, "This upload is already registered")
+    try:
+        digest, size = validate_blob_apk(data.url)
+    except HTTPException as exc:
+        if exc.status_code in (400, 413):
+            blob.delete(data.url)
+        raise
+    return _save_build(db, user, project_id, data.version_name, data.version_code, data.package_name, digest, key, size)
 
 
 @router.get("/api/v1/projects/{project_id}/builds")

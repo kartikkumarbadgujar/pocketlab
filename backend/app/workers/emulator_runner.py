@@ -143,12 +143,23 @@ class HttpReporter:
 
     def download_apk(self, destination: Path) -> Path:
         destination.parent.mkdir(parents=True, exist_ok=True)
-        with self.client.stream("POST", f"/runner/jobs/{self.run_id}/apk", json=self.identity) as response:
-            if response.status_code != 200:
-                raise PreflightError(f"APK download failed with HTTP {response.status_code}")
-            with destination.open("wb") as handle:
-                for chunk in response.iter_bytes(1024 * 1024):
-                    handle.write(chunk)
+        with destination.open("wb") as handle:
+            offset = 0
+            while True:
+                # 200 = whole file (disk storage); 206 = one range of a Blob-stored APK (serverless hosting).
+                with self.client.stream("POST", f"/runner/jobs/{self.run_id}/apk", params={"offset": offset}, json=self.identity) as response:
+                    if response.status_code not in (200, 206):
+                        raise PreflightError(f"APK download failed with HTTP {response.status_code}")
+                    received = 0
+                    for chunk in response.iter_bytes(1024 * 1024):
+                        handle.write(chunk)
+                        received += len(chunk)
+                    if response.status_code == 200:
+                        break
+                    total = int(response.headers.get("X-PocketLab-Total-Size", "0"))
+                offset += received
+                if received == 0 or offset >= total:
+                    break
         return destination
 
 

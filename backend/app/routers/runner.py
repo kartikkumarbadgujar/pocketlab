@@ -4,7 +4,7 @@ import hashlib
 import re
 import uuid
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy import exists, or_, select
 from sqlalchemy.orm import Session
@@ -21,7 +21,10 @@ from app.models import (
 )
 from app.schemas.api import BatchMetrics, ClaimInput, FindingInput, HeartbeatInput
 from app.schemas.environment import ConditionBatch, DeviceRegistration, EnvironmentUpdate, EventBatch, FailInput, RunnerIdentity, ScenarioResultInput
+from app.services import blob
 from app.services import environment as env_service
+
+APK_CHUNK_BYTES = 3 * 1024 * 1024
 
 router=APIRouter(prefix="/api/v1/runner",tags=["runner"],dependencies=[Depends(require_runner)])
 LEASE_SECONDS=90
@@ -150,10 +153,15 @@ def canceled(run_id:int,data:RunnerIdentity,db:Session=Depends(get_db)):
     db.delete(lease);db.commit();return {"status":"canceled"}
 
 @router.post("/jobs/{run_id}/apk")
-def download_apk(run_id:int,data:RunnerIdentity,db:Session=Depends(get_db)):
+def download_apk(run_id:int,data:RunnerIdentity,offset:int=Query(0,ge=0),db:Session=Depends(get_db)):
     agent=_agent(db,data.agent_name,data.authentication_identity);_,run=_owned_lease(db,run_id,agent)
     build=db.get(AppBuild,run.app_build_id) if run.app_build_id else None
     if not build or build.scan_status!="approved":raise HTTPException(409,"Run has no approved build")
+    if build.apk_storage_key.startswith(blob.BLOB_PREFIX):
+        # Serverless responses are capped (~4.5 MB): serve Blob-stored APKs in ranges; the worker requests successive
+        # offsets until it has X-PocketLab-Total-Size bytes and then verifies the SHA-256.
+        body,total=blob.read_range(build.apk_storage_key[len(blob.BLOB_PREFIX):],offset,APK_CHUNK_BYTES)
+        return Response(body,status_code=206,media_type="application/octet-stream",headers={"X-PocketLab-SHA256":build.apk_sha256,"X-PocketLab-Total-Size":str(total),"Content-Range":f"bytes {offset}-{offset+len(body)-1}/{total}"})
     root=Path(settings.upload_dir).resolve();path=(root/build.apk_storage_key).resolve()
     if root not in path.parents or not path.is_file():raise HTTPException(404,"APK artifact is missing from storage")
     return FileResponse(path,media_type="application/vnd.android.package-archive",filename=f"build_{build.id}.apk",headers={"X-PocketLab-SHA256":build.apk_sha256})

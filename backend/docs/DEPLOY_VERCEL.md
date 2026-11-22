@@ -15,7 +15,8 @@ Both projects are on the Hobby plan and the database on Neon's Free plan, so not
 * Environment variables (Project → Settings → Environment Variables): `DATABASE_URL` (Neon's *unpooled* URL; the
   config switches it to the psycopg 3 driver), `JWT_SECRET`, `RUNNER_TOKEN`, `ENVIRONMENT=production`,
   `CORS_ORIGINS`, `CORS_ORIGIN_REGEX=^https://pocketlab[a-z0-9-]*\.vercel\.app$`, `TRUSTED_HOSTS=["*"]`,
-  `UPLOAD_DIR=/tmp/pocketlab_uploads`. The Neon integration also adds `NEON_*` variables.
+  `UPLOAD_DIR=/tmp/pocketlab_uploads`, `BLOB_READ_WRITE_TOKEN` (added by the Blob store), `GEMINI_API_KEY` (sensitive;
+  enables the assistant) and optionally `GEMINI_MODEL` (default `gemini-3.5-flash`). The Neon integration adds `NEON_*` variables.
 * Deploy: from `backend/`, `npx vercel link --yes --project pocketlab-api` then `npx vercel deploy --prod --yes`.
 
 Serverless functions do not run migrations on start. After a schema change, run them once against Neon from a
@@ -34,11 +35,19 @@ python -m scripts.seed
 
 ## Limits of the free serverless API
 
-* **APK uploads are capped at about 4.5 MB** by Vercel's request-body limit, and uploaded files live in the
-  function's `/tmp`, which is not shared between instances or kept between invocations. Sign-in, projects, catalog,
-  runs and reports work; for real APK testing run the API locally (or on a host with a disk) next to the worker.
-* The Android execution worker cannot run on Vercel (no Android SDK or hardware virtualization). Run it on a laptop or
-  VM with `POCKETLAB_API_URL` pointing at an API it can share APK storage with (see `ANDROID_WORKER.md`).
+* **APK uploads go straight to Vercel Blob.** Functions reject bodies above ~4.5 MB, so the dashboard asks the API for
+  a short-lived upload token (`POST /projects/{id}/builds/upload-token`), uploads the APK from the browser to the
+  private Blob store `pocketlab-apks`, then registers it (`POST /projects/{id}/builds/from-upload`); the API downloads
+  and validates it like a normal upload. Without `BLOB_READ_WRITE_TOKEN` (local development) the token endpoint returns
+  404 and the dashboard falls back to the multipart upload.
+* The Android worker downloads Blob-stored APKs in 3 MB ranges (`/runner/jobs/{id}/apk?offset=`) and checks the SHA-256.
+  It cannot run on Vercel itself (no Android SDK or hardware virtualization); run it on a laptop or VM.
 * The rate limiter is per function instance.
 
 The backend also ships a `Dockerfile` for hosts that run containers with a persistent disk.
+
+## AI assistant
+
+The "Ask AI" button in the dashboard opens PocketLab Assistant (`POST /api/v1/assistant/chat`). The API sends Gemini
+the user's question plus their own projects, recent runs and, on a run page, that run's findings and metrics, with
+instructions not to invent measurements. Without `GEMINI_API_KEY` the assistant reports that it is not configured.

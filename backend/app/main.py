@@ -8,7 +8,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from app.config import settings
 from app.database import engine
-from app.routers import auth, catalog, environment, projects, runs, runner
+from app.routers import assistant, auth, catalog, environment, projects, runs, runner
 from app.utils.logging import configure_logging
 
 configure_logging(settings.log_level)
@@ -23,7 +23,6 @@ async def lifespan(app:FastAPI):
 
 app=FastAPI(title="PocketLab API",version="1.0.0",description="Backend for constrained Android application testing.",lifespan=lifespan)
 app.add_middleware(TrustedHostMiddleware,allowed_hosts=settings.trusted_hosts)
-app.add_middleware(CORSMiddleware,allow_origins=settings.cors_origins,allow_origin_regex=settings.cors_origin_regex,allow_credentials=True,allow_methods=["GET","POST","PUT","DELETE","OPTIONS"],allow_headers=["Authorization","Content-Type","Idempotency-Key"],expose_headers=["Content-Disposition"])
 
 # Small per-process sliding window limiter. Production deployments behind multiple workers should use a shared gateway/Redis limiter.
 _requests=defaultdict(deque)
@@ -46,11 +45,18 @@ async def access_log_and_rate_limit(request:Request,call_next):
     window.append(now);started=time.monotonic()
     try:response=await call_next(request)
     except Exception:
-        logger.exception("request_failed",extra={"path":request.url.path,"method":request.method});raise
+        # Answer with JSON instead of re-raising: a re-raised error is turned into a 500 outside CORSMiddleware, the
+        # browser then hides it and the dashboard can only say the API is unreachable.
+        logger.exception("request_failed",extra={"path":request.url.path,"method":request.method})
+        response=JSONResponse(status_code=500,content={"detail":"Internal server error"})
     logger.info("http_request",extra={"path":request.url.path,"method":request.method,"status_code":response.status_code,"duration_ms":round((time.monotonic()-started)*1000,2)})
     return response
 
-for router in (auth.router,projects.router,catalog.router,runs.router,runner.router,environment.router):app.include_router(router)
+# Added last so it is the outermost middleware: every response, including the 429/413 answers above, carries CORS
+# headers and the dashboard can show the real error instead of "Could not reach the PocketLab API".
+app.add_middleware(CORSMiddleware,allow_origins=settings.cors_origins,allow_origin_regex=settings.cors_origin_regex,allow_credentials=True,allow_methods=["GET","POST","PUT","DELETE","OPTIONS"],allow_headers=["Authorization","Content-Type","Idempotency-Key"],expose_headers=["Content-Disposition"])
+
+for router in (auth.router,projects.router,catalog.router,runs.router,runner.router,environment.router,assistant.router):app.include_router(router)
 
 @app.get("/health/live",tags=["health"])
 def live():return {"status":"ok"}

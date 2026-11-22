@@ -18,6 +18,12 @@ class Settings(BaseSettings):
     cors_origin_regex: str | None = None
     trusted_hosts: list[str] = ["localhost", "127.0.0.1", "testserver"]
     upload_dir: str = "./private_uploads"
+    # Vercel Blob read-write token. When set, browsers upload APKs straight to a private Blob store (serverless
+    # functions cannot accept large request bodies); see app/services/blob.py.
+    blob_read_write_token: str | None = None
+    # Google Gemini API key for the in-app assistant (/api/v1/assistant). Unset = assistant disabled.
+    gemini_api_key: str | None = None
+    gemini_model: str = "gemini-3.5-flash"
     max_apk_size_bytes: int = 104857600
     rate_limit: str = "120/minute"
     log_level: str = "INFO"

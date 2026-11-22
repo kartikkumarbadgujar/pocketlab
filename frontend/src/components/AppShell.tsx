@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { Activity, Bell, ChevronDown, CircleHelp, FlaskConical, FolderKanban, House, LogOut, Menu, Settings2, Smartphone, X } from 'lucide-react'
 import { useAuth } from '../auth/useAuth'
 import FloatingDock from './FloatingDock'
+import AssistantWidget from './AssistantWidget'
 
 const sections = [
   { label: 'Workspace', items: [{ to: '/', title: 'Overview', icon: House }, { to: '/projects', title: 'Projects', icon: FolderKanban }, { to: '/devices', title: 'Device inventory', icon: Smartphone }] },
@@ -26,5 +27,6 @@ export default function AppShell() {
     {menuOpen && <button className="mobile-scrim" aria-label="Close navigation" onClick={() => setMenuOpen(false)} />}
     <div className="app-main"><header className="topbar"><div className="topbar-left"><button className="icon-button mobile-menu" aria-label="Open menu" onClick={() => setMenuOpen(true)}><Menu size={20} /></button><span className="topbar-context">Workspace</span><span className="breadcrumb-slash">/</span><span className="topbar-current">{title}</span></div><div className="topbar-right"><span className="environment-pill"><span /> API-backed workspace</span><button className="icon-button topbar-help" title="Help" onClick={() => navigate('/help')}><CircleHelp size={18} /></button><div className="topbar-avatar" aria-label="PocketLab account">PL</div></div></header><main className="page-content"><Outlet /></main></div>
     <FloatingDock />
+    <AssistantWidget />
   </div>
 }
