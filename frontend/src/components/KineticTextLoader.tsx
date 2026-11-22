@@ -39,6 +39,13 @@ export default function KineticTextLoader({ message, text = 'Loading', compact =
       @media (prefers-reduced-motion: reduce) {
         .kinetic-loader-dot, .kinetic-loader-letter { animation: none !important; }
       }
+      @media (max-width: 650px) {
+        .kinetic-loader-visual { transform: scale(.7); }
+        .kinetic-loader-text { font-size: clamp(1.5rem, 7vw, 3rem); }
+        .kinetic-loader-letter { letter-spacing: 4px; }
+        .kinetic-loader-dot { top: 28px; left: 60px; width: 5px; height: 5px; }
+        .kinetic-loader.compact .kinetic-loader-visual { transform: scale(.34); margin: -18px -28px; }
+      }
     `}</style>
     <div className="kinetic-loader-visual" aria-hidden="true">
       <div className="kinetic-loader-dot" style={{ animation: reduceMotion ? 'none' : 'ktl-dotMove 1800ms cubic-bezier(0.25,0.25,0.75,0.75) infinite' }} />
