@@ -24,6 +24,7 @@ export default function GlowCursor() {
   useEffect(() => {
     const element = host.current, canvas = canvasRef.current
     if (!element || !canvas || reduce || matchMedia('(pointer: coarse)').matches) return
+    const pointerTarget = element.parentElement
     const gl = canvas.getContext('webgl2', { alpha: true, antialias: false, depth: false, stencil: false, powerPreference: 'low-power' })
     if (!gl || !gl.getExtension('EXT_color_buffer_float')) { element.classList.add('is-fallback'); return }
     let vs: WebGLShader | null = null, fs: WebGLShader | null = null, program: WebGLProgram | null = null
@@ -52,8 +53,9 @@ export default function GlowCursor() {
     const observer = new IntersectionObserver(([entry]) => { inView = entry.isIntersecting; if (inView) start(); else { cancelAnimationFrame(frame); frame = 0 } })
     const resizeObserver = new ResizeObserver(resize); resizeObserver.observe(element); observer.observe(element); resize()
     canvas.addEventListener('webglcontextlost', lost); canvas.addEventListener('webglcontextrestored', restored)
-    element.addEventListener('pointermove', move); element.addEventListener('pointerleave', leave); document.addEventListener('visibilitychange', visibility); start()
-    return () => { disposed = true; cancelAnimationFrame(frame); observer.disconnect(); resizeObserver.disconnect(); canvas.removeEventListener('webglcontextlost', lost); canvas.removeEventListener('webglcontextrestored', restored); element.removeEventListener('pointermove', move); element.removeEventListener('pointerleave', leave); document.removeEventListener('visibilitychange', visibility); if (program) gl.deleteProgram(program); if (vs) gl.deleteShader(vs); if (fs) gl.deleteShader(fs) }
+    pointerTarget?.addEventListener('pointermove', move); pointerTarget?.addEventListener('pointerleave', leave); document.addEventListener('visibilitychange', visibility); start()
+    return () => { disposed = true; cancelAnimationFrame(frame); observer.disconnect(); resizeObserver.disconnect(); canvas.removeEventListener('webglcontextlost', lost); canvas.removeEventListener('webglcontextrestored', restored); pointerTarget?.removeEventListener('pointermove', move); pointerTarget?.removeEventListener('pointerleave', leave); document.removeEventListener('visibilitychange', visibility); if (program) gl.deleteProgram(program); if (vs) gl.deleteShader(vs); if (fs) gl.deleteShader(fs) }
   }, [reduce])
   return <div ref={host} className="glow-cursor is-fallback" aria-hidden="true"><canvas ref={canvasRef} /></div>
 }
+

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type HTMLAttributes, type ReactNode } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { ChevronDown } from 'lucide-react'
 
@@ -15,10 +15,15 @@ const faqs = [
   ['How can I reproduce a detected failure?', 'Open the finding and use its linked run, profile, scenario, reproduction steps, and evidence. Re-run the same versioned profile and scenario on a compatible device.'],
 ] as const
 
-export default function FaqAccordion() {
-  const [open, setOpen] = useState<number | null>(0)
+export type FaqItem = { question: string; answer: ReactNode }
+export type FaqAccordionProps = HTMLAttributes<HTMLDivElement> & { items?: FaqItem[]; title?: string }
+
+export default function FaqAccordion({ items = faqs.map(([question, answer]) => ({ question, answer })), title = 'PocketLab FAQs', className, ...props }: FaqAccordionProps) {
+  const [open, setOpen] = useState<number | null>(null)
   const reduce = useReducedMotion()
-  return <div className="faq-list">{faqs.map(([question, answer], index) => {
+  return <div className={`faq-list ${className ?? ''}`} {...props}>
+    {title && <h2 className="faq-list-title">{title}</h2>}
+    {items.map(({ question, answer }, index) => {
     const expanded = open === index
     const contentId = `faq-content-${index}`
     return <article className={`faq-item ${expanded ? 'open' : ''}`} key={question}>
@@ -27,3 +32,4 @@ export default function FaqAccordion() {
     </article>
   })}</div>
 }
+

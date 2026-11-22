@@ -66,7 +66,8 @@ test('mobile dock navigates and reduced-motion preference is honored', async ({ 
 
   const dock = page.getByRole('navigation', { name: 'Mobile navigation' })
   await expect(dock).toBeVisible()
-  await page.getByRole('button', { name: /Normal Baseline/ }).click()
+  await page.getByRole('button', { name: /Browse test profiles/ }).click()
+  await page.getByRole('button', { name: 'Inspect Normal Baseline' }).click()
   await page.getByRole('button', { name: 'Configure test' }).click()
   await expect(page).toHaveURL(/\/test-lab\?profileVersionId=\d+/)
   await dock.getByRole('link', { name: 'Test Lab' }).click()
@@ -80,3 +81,4 @@ test('mobile dock navigates and reduced-motion preference is honored', async ({ 
   }))
   expect(dimensions.content).toBeLessThanOrEqual(dimensions.viewport)
 })
+
